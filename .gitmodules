@@ -1,0 +1,14 @@
+[submodule "external/glfw"]
+	path = external/glfw
+	url = https://github.com/glfw/glfw/
+	branch = 3.3-stable
+[submodule "external/vk-bootstrap"]
+	path = external/vk-bootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap
+[submodule "external/glm"]
+	path = external/glm
+	url = https://github.com/g-truc/glm
+	branch = 0.9.8
+[submodule "external/nlohmann-json"]
+	path = external/nlohmann-json
+	url = https://github.com/nlohmann/json
