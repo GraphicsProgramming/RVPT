@@ -1,5 +1,5 @@
 # Directories
 .idea
 cmake-build-*
-
+.vscode
 # Files
