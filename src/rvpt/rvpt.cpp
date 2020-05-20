@@ -16,12 +16,7 @@ RVPT::~RVPT()
 }
 
 bool RVPT::initialize()
-{
-    if (!context_init())
-    {
-        return false;
-    }
-}
+{ return context_init(); }
 
 bool RVPT::draw() { return true; }
 
