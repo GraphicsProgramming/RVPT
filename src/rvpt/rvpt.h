@@ -10,19 +10,12 @@
 #include <GLFW/glfw3.h>
 
 #include <VkBootstrap.h>
+#include "window.h"
 
 class RVPT
 {
    public:
-    struct Settings
-    {
-        int width = 800;
-        int height = 600;
-        bool fullscreen = false;
-        bool vsync = true;
-    };
-
-    RVPT(Settings init_settings);
+    explicit RVPT(window& window);
     ~RVPT();
 
     RVPT(RVPT const& other) = delete;
@@ -30,23 +23,21 @@ class RVPT
     RVPT(RVPT&& other) = delete;
     RVPT operator=(RVPT&& other) = delete;
 
+
     bool initialize();
 
     bool draw();
 
-    GLFWwindow* get_window();
-
    private:
-    Settings settings;
 
     struct Context
     {
-        GLFWwindow* glfw_window{};
         VkSurfaceKHR surf{};
         vkb::Instance inst{};
         vkb::Device device{};
     } context;
     VkDevice vk_device{};
+    window& window_ref;
 
     // helper functions
     bool context_init();

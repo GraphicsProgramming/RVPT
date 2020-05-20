@@ -8,19 +8,19 @@
 
 int main()
 {
-    RVPT::Settings settings;
+    window::settings settings;
     settings.height = 512;
     settings.width = 512;
-    RVPT rvpt(settings);
+    window window(settings);
+    RVPT rvpt(window);
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
     {
         std::cout << "failed to initialize RVPT\n";
         return 0;
     }
-    auto glfw_window = rvpt.get_window();
 
-    while (!glfwWindowShouldClose(glfw_window))
+    while (!window.should_close())
     {
         glfwPollEvents();
     }

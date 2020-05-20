@@ -1,6 +1,9 @@
 #include "rvpt.h"
 
-RVPT::RVPT(Settings init_settings) : settings(init_settings) {}
+RVPT::RVPT(window& window) : window_ref(window)
+{
+
+}
 
 RVPT::~RVPT()
 {
@@ -9,8 +12,6 @@ RVPT::~RVPT()
         vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
     vkb::destroy_instance(context.inst);
 
-    glfwDestroyWindow(context.glfw_window);
-    context.glfw_window = nullptr;
 
     glfwTerminate();
 }
@@ -20,31 +21,11 @@ bool RVPT::initialize()
 
 bool RVPT::draw() { return true; }
 
-GLFWwindow* RVPT::get_window() { return context.glfw_window; }
-
 // Private functions //
 
 bool RVPT::context_init()
 {
-    const char* APP_NAME = "RVPT";
-
-    auto glfw_ret = glfwInit();
-    if (!glfw_ret)
-    {
-        std::cout << "Failed to initialize glfw" << '\n';
-        return false;
-    }
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    context.glfw_window = glfwCreateWindow(settings.width, settings.height,
-                                           APP_NAME, nullptr, nullptr);
-    if (context.glfw_window == nullptr)
-    {
-        std::cout << "Failed to create a glfw window" << '\n';
-        return false;
-    }
-
+    const char * APP_NAME = "RVPT";
     vkb::InstanceBuilder inst_builder;
     auto inst_ret = inst_builder.set_app_name(APP_NAME)
                         .request_validation_layers()
@@ -61,7 +42,7 @@ bool RVPT::context_init()
     context.inst = inst_ret.value();
 
     VkResult surf_res = glfwCreateWindowSurface(
-        context.inst.instance, context.glfw_window, nullptr, &context.surf);
+        context.inst.instance, window_ref.get_window_pointer(), nullptr, &context.surf);
     if (surf_res != VK_SUCCESS)
     {
         std::cout << "Failed to create a surface" << '\n';
