@@ -59,7 +59,7 @@ bool RVPT::context_init()
     if (!inst_ret)
     {
         std::cout << "Failed to create an instance: "
-                  << vkb::to_string(inst_ret.error().type) << '\n';
+                  << inst_ret.error().message() << '\n';
         return false;
     }
 
@@ -80,7 +80,7 @@ bool RVPT::context_init()
     if (!phys_ret)
     {
         std::cout << "Failed to find a physical device: "
-                  << vkb::to_string(phys_ret.error().type) << '\n';
+                  << phys_ret.error().message() << '\n';
         return false;
     }
 
@@ -88,8 +88,8 @@ bool RVPT::context_init()
     auto dev_ret = dev_builder.build();
     if (!dev_ret)
     {
-        std::cout << "Failed create a device: "
-                  << vkb::to_string(dev_ret.error().type) << '\n';
+        std::cout << "Failed create a device: " << dev_ret.error().message()
+                  << '\n';
         return false;
     }
 
