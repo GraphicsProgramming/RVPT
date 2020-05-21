@@ -70,14 +70,12 @@ class CommandBuffer;
 class Queue
 {
    public:
-    explicit Queue(VkQueue queue, uint32_t family);
+    explicit Queue(VkDevice device, uint32_t family, uint32_t queue_index = 0);
 
-    void submit(std::vector<CommandBuffer> const& command_buffers,
-                Fence& fence);
-    void submit(std::vector<CommandBuffer> const& command_buffers,
-                Fence const& fence,
-                std::vector<Semaphore> const& wait_semaphores,
-                std::vector<Semaphore> const& signal_semaphores,
+    void submit(CommandBuffer const& command_buffer, Fence& fence);
+    void submit(CommandBuffer const& command_buffer, Fence const& fence,
+                Semaphore const& wait_semaphore,
+                Semaphore const& signal_semaphore,
                 VkPipelineStageFlags const stage_mask);
 
     void wait_idle();
@@ -90,7 +88,6 @@ class Queue
     void submit(VkSubmitInfo const& submitInfo, Fence const& fence);
 
     std::mutex submit_mutex;
-    VkDevice device;
     VkQueue queue;
     int queue_family;
 };
@@ -142,19 +139,39 @@ class CommandBuffer
 class FrameResources
 {
    public:
-    FrameResources(VkDevice, Queue& queue, VkSwapchainKHR swapchain);
-    ~FrameResources();
-    FrameResources(FrameResources const& fence) = delete;
-    FrameResources& operator=(FrameResources const& fence) = delete;
-    FrameResources(FrameResources&& other) noexcept;
-    FrameResources& operator=(FrameResources&& other) noexcept;
+    FrameResources(VkDevice device, Queue& graphics_queue, Queue& present_queue,
+                   VkSwapchainKHR swapchain);
 
-    void prepare_next_frame();
-    void present_next_frame();
+    void submit();
+    VkResult present(uint32_t image_index);
+
+    Queue& graphics_queue;
+    Queue& present_queue;
+    VkSwapchainKHR swapchain;
 
     Semaphore image_avail_sem;
     Semaphore render_finish_sem;
 
+    Fence command_fence;
     CommandBuffer command_buffer;
 };
+
+enum class shader_type
+{
+    vertex,
+    fragment
+};
+
+class ShaderModule
+{
+    ShaderModule(shader_type type, std::vector<uint32_t> const& code);
+    ~ShaderModule();
+    ShaderModule(ShaderModule const& fence) = delete;
+    ShaderModule& operator=(ShaderModule const& fence) = delete;
+    ShaderModule(ShaderModule&& other) noexcept;
+    ShaderModule& operator=(ShaderModule&& other) noexcept;
+
+    VkShaderModule get() const;
+};
+
 }  // namespace VK

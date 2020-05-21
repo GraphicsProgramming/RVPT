@@ -15,6 +15,8 @@
 
 #include "vk_util.h"
 
+const int MAX_FRAMES_IN_FLIGHT = 2;
+
 class RVPT
 {
    public:
@@ -31,7 +33,15 @@ class RVPT
 
     bool update();
 
-    bool draw();
+    enum class draw_return
+    {
+        success,
+        swapchain_out_of_date
+    };
+
+    draw_return draw();
+
+    void shutdown();
 
    private:
     window& window_ref;
@@ -46,12 +56,17 @@ class RVPT
 
     // safe to assume its always available
     std::optional<VK::Queue> graphics_queue;
+    std::optional<VK::Queue> present_queue;
 
     // not safe to assume, not all hardware has a dedicated compute queue
     std::optional<VK::Queue> compute_queue;
 
     vkb::Swapchain vkb_swapchain;
 
+    bool framebuffer_resized = false;
+    uint32_t current_frame_index = 0;
+    std::vector<VK::FrameResources> frame_resources;
+    std::vector<VkFence> frames_inflight_fences;
     // helper functions
     bool context_init();
     bool swapchain_init();

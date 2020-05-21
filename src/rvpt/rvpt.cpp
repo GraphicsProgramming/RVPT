@@ -2,19 +2,93 @@
 
 RVPT::RVPT(window& window) : window_ref(window) {}
 
-RVPT::~RVPT()
-{
-    vkb::destroy_device(context.device);
-    if (context.inst.instance)
-        vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
-    vkb::destroy_instance(context.inst);
+RVPT::~RVPT() {}
 
-    glfwTerminate();
+bool RVPT::initialize()
+{
+    bool init = context_init();
+    init &= swapchain_init();
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        frame_resources.emplace_back(vk_device, graphics_queue.value(),
+                                     present_queue.value(),
+                                     vkb_swapchain.swapchain);
+    }
+    frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
+    return init;
 }
 
-bool RVPT::initialize() { return context_init(); }
+bool RVPT::update() { return true; }
 
-bool RVPT::draw() { return true; }
+RVPT::draw_return RVPT::draw()
+{
+    auto& current_frame = frame_resources[current_frame_index];
+
+    current_frame.command_fence.wait();
+    current_frame.command_buffer.reset();
+    current_frame.command_buffer.begin();
+    // record drawing commands
+    current_frame.command_buffer.end();
+
+    uint32_t swapchain_image_index;
+    VkResult result =
+        vkAcquireNextImageKHR(vk_device, vkb_swapchain.swapchain, UINT64_MAX,
+                              current_frame.image_avail_sem.get(),
+                              VK_NULL_HANDLE, &swapchain_image_index);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        swapchain_reinit();
+        return draw_return::swapchain_out_of_date;
+    }
+    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        std::cerr << "Failed to acquire next swapchain image\n";
+        assert(false);
+    }
+
+    if (frames_inflight_fences[swapchain_image_index] != nullptr)
+    {
+        vkWaitForFences(vk_device, 1,
+                        &frames_inflight_fences[swapchain_image_index], VK_TRUE,
+                        UINT64_MAX);
+    }
+    frames_inflight_fences[swapchain_image_index] =
+        current_frame.command_fence.get();
+
+    current_frame.command_fence.reset();
+    current_frame.submit();
+
+    result = current_frame.present(swapchain_image_index);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+        framebuffer_resized)
+    {
+        framebuffer_resized = false;
+        swapchain_reinit();
+    }
+    else if (result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to present swapchain image\n";
+        assert(false);
+    }
+    current_frame_index = (current_frame_index + 1) % frame_resources.size();
+    return draw_return::success;
+}
+
+void RVPT::shutdown()
+{
+    if (compute_queue) compute_queue->wait_idle();
+    graphics_queue->wait_idle();
+    present_queue->wait_idle();
+
+    frame_resources.clear();
+
+    vkb::destroy_swapchain(vkb_swapchain);
+    vkb::destroy_device(context.device);
+    vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
+    vkb::destroy_instance(context.inst);
+}
 
 // Private functions //
 
@@ -67,27 +141,33 @@ bool RVPT::context_init()
     context.device = dev_ret.value();
     vk_device = dev_ret.value().device;
 
-    auto graphics_queue_ret =
-        context.device.get_queue(vkb::QueueType::graphics);
     auto graphics_queue_index_ret =
         context.device.get_queue_index(vkb::QueueType::graphics);
-    if (!graphics_queue_ret || !graphics_queue_index_ret)
+    if (!graphics_queue_index_ret)
     {
         std::cerr << "Failed get the graphics queue: "
                   << dev_ret.error().message() << '\n';
 
         return false;
     }
-    graphics_queue.emplace(graphics_queue_ret.value(),
-                           graphics_queue_index_ret.value());
-    auto compute_queue_ret =
-        context.device.get_dedicated_queue(vkb::QueueType::compute);
+    graphics_queue.emplace(vk_device, graphics_queue_index_ret.value());
+
+    auto present_queue_index_ret =
+        context.device.get_queue_index(vkb::QueueType::present);
+    if (!present_queue_index_ret)
+    {
+        std::cerr << "Failed get the present queue: "
+                  << dev_ret.error().message() << '\n';
+
+        return false;
+    }
+    present_queue.emplace(vk_device, present_queue_index_ret.value());
+
     auto compute_queue_index_ret =
         context.device.get_dedicated_queue_index(vkb::QueueType::compute);
-    if (compute_queue_ret && compute_queue_index_ret)
+    if (compute_queue_index_ret)
     {
-        compute_queue.emplace(compute_queue_ret.value(),
-                              compute_queue_index_ret.value());
+        compute_queue.emplace(vk_device, compute_queue_index_ret.value());
     }
     return true;
 }

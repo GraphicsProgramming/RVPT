@@ -23,7 +23,10 @@ int main()
     while (!window.should_close())
     {
         glfwPollEvents();
+        rvpt.update();
+        rvpt.draw();
     }
+    rvpt.shutdown();
 
     return 0;
 }
