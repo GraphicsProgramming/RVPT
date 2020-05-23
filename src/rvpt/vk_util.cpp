@@ -2,7 +2,7 @@
 
 #include <type_traits>
 #include <utility>
-
+#include <unordered_map>
 namespace VK
 {
 const char* error_str(const VkResult result)
@@ -52,35 +52,26 @@ auto gather_vk_types(std::vector<T> const& values)
 // Fence
 
 constexpr long DEFAULT_FENCE_TIMEOUT = 1000000000;
-
-Fence::Fence(VkDevice device, VkFenceCreateFlags flags) : device(device)
+namespace detail
+{
+auto create_fence(VkDevice device, VkFenceCreateFlags flags)
 {
     VkFenceCreateInfo fenceCreateInfo{};
     fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCreateInfo.flags = flags;
-    VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
+    VkFence handle;
+    VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &handle));
+    return HandleWrapper(device, handle, vkDestroyFence);
 }
-
-Fence::~Fence()
+}  // namespace detail
+Fence::Fence(VkDevice device, VkFenceCreateFlags flags)
+    : fence(detail::create_fence(device, flags))
 {
-    if (fence != nullptr) vkDestroyFence(device, fence, nullptr);
-}
-
-Fence::Fence(Fence&& other) noexcept : device(other.device), fence(other.fence)
-{
-    other.fence = nullptr;
-}
-Fence& Fence::operator=(Fence&& other) noexcept
-{
-    device = other.device;
-    fence = other.fence;
-    other.fence = nullptr;
-    return *this;
 }
 
 bool Fence::check() const
 {
-    VkResult out = vkGetFenceStatus(device, fence);
+    VkResult out = vkGetFenceStatus(fence.device, fence.handle);
     if (out == VK_SUCCESS)
         return true;
     else if (out == VK_NOT_READY)
@@ -91,42 +82,33 @@ bool Fence::check() const
 
 void Fence::wait(bool condition) const
 {
-    vkWaitForFences(device, 1, &fence, condition, DEFAULT_FENCE_TIMEOUT);
+    vkWaitForFences(fence.device, 1, &fence.handle, condition,
+                    DEFAULT_FENCE_TIMEOUT);
 }
 
-VkFence Fence::get() const { return fence; }
+VkFence Fence::get() const { return fence.handle; }
 
-void Fence::reset() const { vkResetFences(device, 1, &fence); }
+void Fence::reset() const { vkResetFences(fence.device, 1, &fence.handle); }
 
 // Semaphore
-
-Semaphore::Semaphore(VkDevice device) : device(device)
+namespace detail
+{
+auto create_semaphore(VkDevice device)
 {
     VkSemaphoreCreateInfo semaphoreCreateInfo{};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkSemaphore semaphore;
     VK_CHECK_RESULT(
         vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphore));
+    return HandleWrapper(device, semaphore, vkDestroySemaphore);
+}
+}  // namespace detail
+Semaphore::Semaphore(VkDevice device)
+    : semaphore(detail::create_semaphore(device))
+{
 }
 
-Semaphore::~Semaphore()
-{
-    if (semaphore != nullptr) vkDestroySemaphore(device, semaphore, nullptr);
-}
-
-Semaphore::Semaphore(Semaphore&& other) noexcept
-    : device(other.device), semaphore(other.semaphore)
-{
-    other.semaphore = nullptr;
-}
-Semaphore& Semaphore::operator=(Semaphore&& other) noexcept
-{
-    device = other.device;
-    semaphore = other.semaphore;
-    other.semaphore = nullptr;
-    return *this;
-}
-
-VkSemaphore Semaphore::get() const { return semaphore; }
+VkSemaphore Semaphore::get() const { return semaphore.handle; }
 
 // Queue
 
@@ -193,35 +175,25 @@ void Queue::wait_idle()
 }
 
 // Command Pool
-
-CommandPool::CommandPool(VkDevice device, Queue const& queue,
+namespace detail
+{
+auto create_command_pool(VkDevice device, Queue const& queue,
                          VkCommandPoolCreateFlags flags)
-    : device(device)
 {
     VkCommandPoolCreateInfo cmd_pool_info{};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_info.queueFamilyIndex = queue.get_family();
     cmd_pool_info.flags = flags;
+    VkCommandPool pool;
     VK_CHECK_RESULT(
         vkCreateCommandPool(device, &cmd_pool_info, nullptr, &pool));
+    return HandleWrapper(device, pool, vkDestroyCommandPool);
 }
-
-CommandPool::~CommandPool()
+}  // namespace detail
+CommandPool::CommandPool(VkDevice device, Queue const& queue,
+                         VkCommandPoolCreateFlags flags)
+    : pool(detail::create_command_pool(device, queue, flags))
 {
-    if (pool != nullptr) vkDestroyCommandPool(device, pool, nullptr);
-}
-
-CommandPool::CommandPool(CommandPool&& other) noexcept
-    : device(other.device), pool(other.pool)
-{
-    other.pool = nullptr;
-}
-CommandPool& CommandPool::operator=(CommandPool&& other) noexcept
-{
-    device = other.device;
-    pool = other.pool;
-    other.pool = nullptr;
-    return *this;
 }
 
 VkCommandBuffer CommandPool::allocate()
@@ -230,17 +202,17 @@ VkCommandBuffer CommandPool::allocate()
 
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = pool;
+    alloc_info.commandPool = pool.handle;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount = 1;
 
     VK_CHECK_RESULT(
-        vkAllocateCommandBuffers(device, &alloc_info, &command_buffer));
+        vkAllocateCommandBuffers(pool.device, &alloc_info, &command_buffer));
     return command_buffer;
 }
 void CommandPool::free(VkCommandBuffer command_buffer)
 {
-    vkFreeCommandBuffers(device, pool, 1, &command_buffer);
+    vkFreeCommandBuffers(pool.device, pool.handle, 1, &command_buffer);
 }
 
 // Command Buffer
@@ -325,6 +297,206 @@ VkResult FrameResources::present(uint32_t image_index)
 
     return present_queue.presentation_submit(presentInfo);
 }
-// ShaderModule
+
+// DescriptorUse
+DescriptorUse::DescriptorUse(uint32_t bindPoint, uint32_t count,
+                             VkDescriptorType type,
+                             DescriptorUseVector descriptor_use_data)
+    : bind_point(bind_point),
+      count(count),
+      type(type),
+      descriptor_use_data(descriptor_use_data)
+{
+}
+
+VkWriteDescriptorSet DescriptorUse::get_write_descriptor_set(
+    VkDescriptorSet set)
+{
+    VkWriteDescriptorSet writeDescriptorSet{};
+    writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writeDescriptorSet.dstSet = set;
+    writeDescriptorSet.descriptorType = type;
+    writeDescriptorSet.dstBinding = bind_point;
+    writeDescriptorSet.descriptorCount = count;
+
+    if (descriptor_use_data.index() == 0)
+        writeDescriptorSet.pBufferInfo =
+            std::get<std::vector<VkDescriptorBufferInfo>>(descriptor_use_data)
+                .data();
+    else if (descriptor_use_data.index() == 1)
+        writeDescriptorSet.pImageInfo =
+            std::get<std::vector<VkDescriptorImageInfo>>(descriptor_use_data)
+                .data();
+    else if (descriptor_use_data.index() == 2)
+        writeDescriptorSet.pTexelBufferView =
+            std::get<std::vector<VkBufferView>>(descriptor_use_data).data();
+    return writeDescriptorSet;
+}
+
+// DescriptorSet
+
+DescriptorSet::DescriptorSet(VkDevice device, VkDescriptorSet set,
+                             VkDescriptorSetLayout layout)
+    : device(device), set(set), layout(layout)
+{
+}
+void DescriptorSet::update(std::vector<DescriptorUse> descriptors) const
+{
+    std::vector<VkWriteDescriptorSet> writes;
+    for (auto& descriptor : descriptors)
+    {
+        writes.push_back(descriptor.get_write_descriptor_set(set));
+    }
+
+    vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()),
+                           writes.data(), 0, nullptr);
+}
+void DescriptorSet::bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point,
+                         VkPipelineLayout layout, uint32_t location) const
+{
+    vkCmdBindDescriptorSets(cmdBuf, bind_point, layout, location, 1, &set, 0,
+                            nullptr);
+}
+
+// DescriptorPool
+namespace detail
+{
+auto create_descriptor_set_layout(
+    VkDevice device, std::vector<VkDescriptorSetLayoutBinding> const& bindings)
+{
+    VkDescriptorSetLayoutCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = static_cast<uint32_t>(bindings.size());
+    create_info.pBindings = bindings.data();
+
+    VkDescriptorSetLayout layout;
+    VK_CHECK_RESULT(
+        vkCreateDescriptorSetLayout(device, &create_info, nullptr, &layout));
+    return HandleWrapper(device, layout, vkDestroyDescriptorSetLayout);
+}
+auto create_descriptor_pool(
+    VkDevice device, std::vector<VkDescriptorSetLayoutBinding> const& bindings,
+    uint32_t max_sets)
+{
+    std::unordered_map<VkDescriptorType, uint32_t> descriptor_map;
+    for (auto& binding : bindings)
+    {
+        descriptor_map[binding.descriptorType] += binding.descriptorCount;
+    }
+    std::vector<VkDescriptorPoolSize> pool_sizes;
+    for (auto& [type, count] : descriptor_map)
+    {
+        pool_sizes.push_back(VkDescriptorPoolSize{type, max_sets * count});
+    }
+
+    VkDescriptorPoolCreateInfo create_info;
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    create_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    create_info.pPoolSizes = pool_sizes.data();
+    create_info.maxSets = max_sets;
+
+    VkDescriptorPool pool;
+    VK_CHECK_RESULT(
+        vkCreateDescriptorPool(device, &create_info, nullptr, &pool));
+    return HandleWrapper(device, pool, vkDestroyDescriptorPool);
+}
+
+}  // namespace detail
+DescriptorPool::DescriptorPool(
+    VkDevice device, std::vector<VkDescriptorSetLayoutBinding> const& bindings,
+    uint32_t count)
+    : layout(detail::create_descriptor_set_layout(device, bindings)),
+      pool(detail::create_descriptor_pool(device, bindings, count)),
+      max_sets(count)
+{
+}
+
+DescriptorSet DescriptorPool::allocate()
+{
+    assert(current_sets < max_sets);
+    VkDescriptorSet set;
+    VkResult res = vkAllocateDescriptorSets(pool.device, nullptr, &set);
+    assert(res == VK_SUCCESS);
+
+    return {pool.device, set, layout.handle};
+}
+void DescriptorPool::free(DescriptorSet set)
+{
+    if (current_sets > 0)
+        vkFreeDescriptorSets(pool.device, pool.handle, 1, &set.set);
+}
+
+// Render Pass
+
+VkRenderPass create_render_pass(VkDevice device,
+                                VkFormat swapchain_image_format)
+{
+    VkAttachmentDescription color_attachment{};
+    color_attachment.format = swapchain_image_format;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference color_attachment_ref{};
+    color_attachment_ref.attachment = 0;
+    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment_ref;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo render_pass_info{};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_info.attachmentCount = 1;
+    render_pass_info.pAttachments = &color_attachment;
+    render_pass_info.subpassCount = 1;
+    render_pass_info.pSubpasses = &subpass;
+    render_pass_info.dependencyCount = 1;
+    render_pass_info.pDependencies = &dependency;
+
+    VkRenderPass render_pass;
+
+    VK_CHECK_RESULT(
+        vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
+    return render_pass;
+}
+
+PipelineBuilder::PipelineBuilder(VkDevice device) : device(device) {}
+VkPipeline PipelineBuilder::create_graphics_pipeline(std::string vert_shader,
+                                                     std::string frag_shader)
+{
+    VkGraphicsPipelineCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+
+    VkPipeline pipeline;
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, cache, 1, &create_info,
+                                              nullptr, &pipeline));
+
+    return pipeline;
+}
+
+VkPipeline PipelineBuilder::create_compute_pipeline(std::string compute_shader)
+{
+    VkComputePipelineCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+
+    VkPipeline pipeline;
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, cache, 1, &create_info,
+                                             nullptr, &pipeline));
+    return pipeline;
+}
 
 }  // namespace VK

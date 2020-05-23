@@ -2,9 +2,11 @@
 
 #include <cstdio>
 #include <cassert>
+#include <cstdint>
 
 #include <iostream>
 #include <mutex>
+#include <variant>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -24,17 +26,47 @@ const char* error_str(const VkResult result);
         }                                                                 \
     }
 
+template <typename T, typename Deleter>
+class HandleWrapper
+{
+   public:
+    HandleWrapper(VkDevice device, T handle, Deleter deleter)
+        : device(device), handle(handle), deleter(deleter)
+    {
+    }
+    ~HandleWrapper()
+    {
+        if (handle != nullptr)
+        {
+            deleter(device, handle, nullptr);
+        }
+    };
+    HandleWrapper(HandleWrapper const& fence) = delete;
+    HandleWrapper& operator=(HandleWrapper const& fence) = delete;
+
+    HandleWrapper(HandleWrapper&& other) noexcept
+        : device(other.device), handle(other.handle), deleter(other.deleter)
+    {
+        other.handle = nullptr;
+    }
+    HandleWrapper& operator=(HandleWrapper&& other) noexcept
+    {
+        device = other.device;
+        handle = other.handle;
+        deleter = other.deleter;
+        other.handle = nullptr;
+        return *this;
+    }
+
+    VkDevice device;
+    T handle;
+    Deleter deleter;
+};
+
 class Fence
 {
    public:
     explicit Fence(VkDevice device, VkFenceCreateFlags flags = 0);
-    ~Fence();
-
-    Fence(Fence const& fence) = delete;
-    Fence& operator=(Fence const& fence) = delete;
-
-    Fence(Fence&& other) noexcept;
-    Fence& operator=(Fence&& other) noexcept;
 
     bool check() const;
     void wait(bool condition = true) const;
@@ -42,27 +74,17 @@ class Fence
     VkFence get() const;
 
    private:
-    VkDevice device;
-    VkFence fence;
+    HandleWrapper<VkFence, PFN_vkDestroyFence> fence;
 };
 
 class Semaphore
 {
    public:
     explicit Semaphore(VkDevice device);
-    ~Semaphore();
-
-    Semaphore(Semaphore const& fence) = delete;
-    Semaphore& operator=(Semaphore const& fence) = delete;
-
-    Semaphore(Semaphore&& other) noexcept;
-    Semaphore& operator=(Semaphore&& other) noexcept;
-
     VkSemaphore get() const;
 
    private:
-    VkDevice device;
-    VkSemaphore semaphore;
+    HandleWrapper<VkSemaphore, PFN_vkDestroySemaphore> semaphore;
 };
 
 class CommandBuffer;
@@ -97,19 +119,12 @@ class CommandPool
    public:
     explicit CommandPool(VkDevice device, Queue const& queue,
                          VkCommandPoolCreateFlags flags = 0);
-    ~CommandPool();
-
-    CommandPool(CommandPool const& fence) = delete;
-    CommandPool& operator=(CommandPool const& fence) = delete;
-    CommandPool(CommandPool&& other) noexcept;
-    CommandPool& operator=(CommandPool&& other) noexcept;
 
     VkCommandBuffer allocate();
     void free(VkCommandBuffer command_buffer);
 
    private:
-    VkDevice device;
-    VkCommandPool pool;
+    HandleWrapper<VkCommandPool, PFN_vkDestroyCommandPool> pool;
 };
 
 class CommandBuffer
@@ -156,22 +171,70 @@ class FrameResources
     CommandBuffer command_buffer;
 };
 
-enum class shader_type
+using DescriptorUseVector =
+    std::variant<std::vector<VkDescriptorBufferInfo>,
+                 std::vector<VkDescriptorImageInfo>, std::vector<VkBufferView>>;
+
+class DescriptorUse
 {
-    vertex,
-    fragment
+   public:
+    DescriptorUse(uint32_t bindPoint, uint32_t count, VkDescriptorType type,
+                  DescriptorUseVector descriptor_use_data);
+
+    VkWriteDescriptorSet get_write_descriptor_set(VkDescriptorSet set);
+
+    uint32_t bind_point;
+    uint32_t count;
+    VkDescriptorType type = VkDescriptorType::VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    DescriptorUseVector descriptor_use_data;
 };
 
-class ShaderModule
+class DescriptorSet
 {
-    ShaderModule(shader_type type, std::vector<uint32_t> const& code);
-    ~ShaderModule();
-    ShaderModule(ShaderModule const& fence) = delete;
-    ShaderModule& operator=(ShaderModule const& fence) = delete;
-    ShaderModule(ShaderModule&& other) noexcept;
-    ShaderModule& operator=(ShaderModule&& other) noexcept;
+   public:
+    DescriptorSet(VkDevice device, VkDescriptorSet set,
+                  VkDescriptorSetLayout layout);
 
-    VkShaderModule get() const;
+    void update(std::vector<DescriptorUse> descriptors) const;
+    void bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point,
+              VkPipelineLayout layout, uint32_t location) const;
+
+    VkDevice device;
+    VkDescriptorSet set;
+    VkDescriptorSetLayout layout;
+};
+
+class DescriptorPool
+{
+    DescriptorPool(VkDevice device,
+                   std::vector<VkDescriptorSetLayoutBinding> const& bindings,
+                   uint32_t count);
+
+    DescriptorSet allocate();
+    void free(DescriptorSet set);
+
+    HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout>
+        layout;
+    HandleWrapper<VkDescriptorPool, PFN_vkDestroyDescriptorPool> pool;
+    uint32_t max_sets = 0;
+    uint32_t current_sets = 0;
+};
+
+VkRenderPass create_render_pass(VkDevice device,
+                                VkFormat swapchain_image_format);
+
+struct PipelineBuilder
+{
+    PipelineBuilder() {}  // Must give it the device before using it.
+    PipelineBuilder(VkDevice device);
+
+    VkPipeline create_graphics_pipeline(std::string vert_shader,
+                                        std::string frag_shader);
+    VkPipeline create_compute_pipeline(std::string compute_shader);
+
+   private:
+    VkDevice device = nullptr;
+    VkPipelineCache cache = nullptr;
 };
 
 }  // namespace VK

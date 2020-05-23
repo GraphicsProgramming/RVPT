@@ -46,6 +46,9 @@ class RVPT
    private:
     window& window_ref;
 
+    // from a callback
+    bool framebuffer_resized = false;
+
     struct Context
     {
         VkSurfaceKHR surf{};
@@ -62,14 +65,18 @@ class RVPT
     std::optional<VK::Queue> compute_queue;
 
     vkb::Swapchain vkb_swapchain;
+    std::vector<VkImage> swapchain_images;
+    std::vector<VkImageView> swapchain_image_views;
 
-    bool framebuffer_resized = false;
     uint32_t current_frame_index = 0;
     std::vector<VK::FrameResources> frame_resources;
     std::vector<VkFence> frames_inflight_fences;
+
+    VK::PipelineBuilder pipeline_builder;
+
     // helper functions
     bool context_init();
     bool swapchain_init();
-
     bool swapchain_reinit();
+    bool swapchain_get_images();
 };

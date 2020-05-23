@@ -15,6 +15,7 @@ bool RVPT::initialize()
                                      vkb_swapchain.swapchain);
     }
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
+    pipeline_builder = VK::PipelineBuilder(vk_device);
     return init;
 }
 
@@ -84,6 +85,7 @@ void RVPT::shutdown()
 
     frame_resources.clear();
 
+    vkb_swapchain.destroy_image_views(swapchain_image_views);
     vkb::destroy_swapchain(vkb_swapchain);
     vkb::destroy_device(context.device);
     vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
@@ -183,11 +185,13 @@ bool RVPT::swapchain_init()
         return false;
     }
     vkb_swapchain = ret.value();
-    return true;
+    return swapchain_get_images();
 }
 
 bool RVPT::swapchain_reinit()
 {
+    vkb_swapchain.destroy_image_views(swapchain_image_views);
+
     vkb::SwapchainBuilder swapchain_builder(context.device);
     auto ret = swapchain_builder.recreate(vkb_swapchain);
     if (!ret)
@@ -196,5 +200,25 @@ bool RVPT::swapchain_reinit()
                   << '\n';
         return false;
     }
+    vkb_swapchain = ret.value();
+    return swapchain_get_images();
+}
+
+bool RVPT::swapchain_get_images()
+{
+    auto swapchain_images_ret = vkb_swapchain.get_images();
+    if (!swapchain_images_ret)
+    {
+        return false;
+    }
+    swapchain_images = swapchain_images_ret.value();
+
+    auto swapchain_image_views_ret = vkb_swapchain.get_image_views();
+    if (!swapchain_image_views_ret)
+    {
+        return false;
+    }
+    swapchain_image_views = swapchain_image_views_ret.value();
+
     return true;
 }
