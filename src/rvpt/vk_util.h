@@ -8,6 +8,7 @@
 #include <mutex>
 #include <variant>
 #include <vector>
+#include <utility>
 
 #include <vulkan/vulkan.h>
 
@@ -30,7 +31,7 @@ template <typename T, typename Deleter>
 class HandleWrapper
 {
    public:
-    HandleWrapper(VkDevice device, T handle, Deleter deleter)
+    explicit HandleWrapper(VkDevice device, T handle, Deleter deleter)
         : device(device), handle(handle), deleter(deleter)
     {
     }
@@ -154,8 +155,8 @@ class CommandBuffer
 class FrameResources
 {
    public:
-    FrameResources(VkDevice device, Queue& graphics_queue, Queue& present_queue,
-                   VkSwapchainKHR swapchain);
+    explicit FrameResources(VkDevice device, Queue& graphics_queue,
+                            Queue& present_queue, VkSwapchainKHR swapchain);
 
     void submit();
     VkResult present(uint32_t image_index);
@@ -178,8 +179,9 @@ using DescriptorUseVector =
 class DescriptorUse
 {
    public:
-    DescriptorUse(uint32_t bindPoint, uint32_t count, VkDescriptorType type,
-                  DescriptorUseVector descriptor_use_data);
+    explicit DescriptorUse(uint32_t bind_point, uint32_t count,
+                           VkDescriptorType type,
+                           DescriptorUseVector descriptor_use_data);
 
     VkWriteDescriptorSet get_write_descriptor_set(VkDescriptorSet set);
 
@@ -192,8 +194,8 @@ class DescriptorUse
 class DescriptorSet
 {
    public:
-    DescriptorSet(VkDevice device, VkDescriptorSet set,
-                  VkDescriptorSetLayout layout);
+    explicit DescriptorSet(VkDevice device, VkDescriptorSet set,
+                           VkDescriptorSetLayout layout);
 
     void update(std::vector<DescriptorUse> descriptors) const;
     void bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point,
@@ -206,13 +208,16 @@ class DescriptorSet
 
 class DescriptorPool
 {
-    DescriptorPool(VkDevice device,
-                   std::vector<VkDescriptorSetLayoutBinding> const& bindings,
-                   uint32_t count);
+   public:
+    explicit DescriptorPool(
+        VkDevice device,
+        std::vector<VkDescriptorSetLayoutBinding> const& bindings,
+        uint32_t count);
 
     DescriptorSet allocate();
     void free(DescriptorSet set);
 
+   private:
     HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout>
         layout;
     HandleWrapper<VkDescriptorPool, PFN_vkDestroyDescriptorPool> pool;
@@ -222,19 +227,153 @@ class DescriptorPool
 
 VkRenderPass create_render_pass(VkDevice device,
                                 VkFormat swapchain_image_format);
+void destroy_render_pass(VkDevice device, VkRenderPass render_pass);
+struct Framebuffer
+{
+    Framebuffer(VkDevice device, VkRenderPass render_pass, VkExtent2D extent,
+                std::vector<VkImageView> image_views);
+    HandleWrapper<VkFramebuffer, PFN_vkDestroyFramebuffer> framebuffer;
+};
+
+struct ShaderModule
+{
+    ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_code);
+    HandleWrapper<VkShaderModule, PFN_vkDestroyShaderModule> module;
+};
+
+std::vector<uint32_t> load_spirv(std::string const& filename);
+
+struct Pipeline
+{
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+};
 
 struct PipelineBuilder
 {
     PipelineBuilder() {}  // Must give it the device before using it.
-    PipelineBuilder(VkDevice device);
+    explicit PipelineBuilder(VkDevice device);
 
-    VkPipeline create_graphics_pipeline(std::string vert_shader,
-                                        std::string frag_shader);
-    VkPipeline create_compute_pipeline(std::string compute_shader);
+    Pipeline create_graphics_pipeline(
+        std::string vert_shader, std::string frag_shader,
+        std::vector<VkDescriptorSetLayout> descriptor_layouts,
+        VkRenderPass render_pass, VkExtent2D extent);
+    Pipeline create_compute_pipeline(
+        std::string compute_shader,
+        std::vector<VkDescriptorSetLayout> descriptor_layouts);
+
+    void shutdown();
 
    private:
     VkDevice device = nullptr;
     VkPipelineCache cache = nullptr;
+
+    std::vector<Pipeline> pipelines;
+
+    void create_pipeline_layout(
+        Pipeline& pipeline,
+        std::vector<VkDescriptorSetLayout> const& descriptor_layouts);
 };
+
+enum class MemoryUsage
+{
+    gpu,
+    cpu,
+    transfer_to_gpu
+};
+class Memory
+{
+   public:
+    Memory() {}
+    explicit Memory(VkPhysicalDevice physical_device, VkDevice device);
+
+    void shutdown();
+
+    bool allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage);
+    bool allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage);
+
+    void free(VkImage image);
+    void free(VkBuffer buffer);
+
+   private:
+    // Unused currently
+    struct Pool
+    {
+        Pool(VkDevice device, VkDeviceMemory device_memory,
+             VkDeviceSize max_size);
+        HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> device_memory;
+        VkDeviceSize max_size;
+        struct Allocation
+        {
+            bool allocated = false;
+            VkDeviceSize size;
+            VkDeviceSize offset;
+        };
+        std::vector<Allocation> allocations;
+    };
+
+    VkPhysicalDevice physical_device;
+    VkDevice device;
+    VkPhysicalDeviceMemoryProperties memory_properties;
+
+    std::vector<
+        std::pair<VkImage, HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory>>>
+        image_allocations;
+    std::vector<
+        std::pair<VkBuffer, HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory>>>
+        buffer_allocations;
+
+    VkMemoryPropertyFlags get_memory_property_flags(MemoryUsage usage);
+
+    uint32_t find_memory_type(uint32_t typeFilter,
+                              VkMemoryPropertyFlags properties);
+
+    HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> create_device_memory(
+        VkDeviceSize max_size, uint32_t memory_type);
+    //        VkMemoryRequirements memRequirements, VkMemoryPropertyFlags
+    //        properties);
+};
+
+class Image
+{
+   public:
+    explicit Image(VkDevice device, Memory& memory, VkFormat format,
+                   VkImageTiling tiling, uint32_t width, uint32_t height,
+                   VkImageUsageFlags usage, VkDeviceSize size,
+                   MemoryUsage memory_usage);
+    ~Image();
+
+    VkDescriptorImageInfo descriptor_info() const;
+
+    Memory* memory_ptr;
+    HandleWrapper<VkImage, PFN_vkDestroyImage> image;
+    bool successfully_got_memory;
+    HandleWrapper<VkImageView, PFN_vkDestroyImageView> image_view;
+    HandleWrapper<VkSampler, PFN_vkDestroySampler> sampler;
+
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+
+class Buffer
+{
+   public:
+    explicit Buffer(VkDevice device, Memory& memory, VkBufferUsageFlags usage,
+                    VkDeviceSize size, MemoryUsage memory_usage);
+    ~Buffer();
+
+    VkDescriptorBufferInfo descriptor_info() const;
+
+    Memory* memory_ptr;
+    HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
+    VkDeviceSize size;
+};
+
+void set_image_layout(
+    VkCommandBuffer command_buffer, VkImage image,
+    VkImageLayout old_image_layout, VkImageLayout new_image_layout,
+    VkImageSubresourceRange subresource_range,
+    VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    VkPipelineStageFlags dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
 }  // namespace VK

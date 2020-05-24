@@ -64,6 +64,9 @@ class RVPT
     // not safe to assume, not all hardware has a dedicated compute queue
     std::optional<VK::Queue> compute_queue;
 
+    VK::PipelineBuilder pipeline_builder;
+    VK::Memory memory_allocator;
+
     vkb::Swapchain vkb_swapchain;
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
@@ -72,11 +75,19 @@ class RVPT
     std::vector<VK::FrameResources> frame_resources;
     std::vector<VkFence> frames_inflight_fences;
 
-    VK::PipelineBuilder pipeline_builder;
+    VkRenderPass fullscreen_tri_render_pass;
+    VK::Pipeline fullscreen_triangle_pipeline;
+
+    std::vector<VK::Framebuffer> framebuffers;
+
+    std::optional<VK::Image> sampled_image;
+    std::optional<VK::DescriptorPool> sampled_image_pool;
+    std::optional<VK::DescriptorSet> sampled_image_descriptor_set;
 
     // helper functions
     bool context_init();
     bool swapchain_init();
     bool swapchain_reinit();
     bool swapchain_get_images();
+    void create_framebuffers();
 };

@@ -7,6 +7,10 @@ RVPT::~RVPT() {}
 bool RVPT::initialize()
 {
     bool init = context_init();
+    pipeline_builder = VK::PipelineBuilder(vk_device);
+    memory_allocator =
+        VK::Memory(context.device.physical_device.physical_device, vk_device);
+
     init &= swapchain_init();
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -15,10 +19,58 @@ bool RVPT::initialize()
                                      vkb_swapchain.swapchain);
     }
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
-    pipeline_builder = VK::PipelineBuilder(vk_device);
+
+    fullscreen_tri_render_pass =
+        VK::create_render_pass(vk_device, vkb_swapchain.image_format);
+
+    create_framebuffers();
+
+    sampled_image.emplace(
+        vk_device, memory_allocator, VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_TILING_LINEAR, 512, 512,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
+
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+         VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+
+    sampled_image_pool.emplace(vk_device, layout_bindings, 1);
+    sampled_image_descriptor_set = sampled_image_pool->allocate();
+
+    std::vector<VkDescriptorImageInfo> image_descriptor_info = {
+        sampled_image->descriptor_info()};
+    VK::DescriptorUse descriptor_use{
+        0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, image_descriptor_info};
+
+    auto write_descriptor = descriptor_use.get_write_descriptor_set(
+        sampled_image_descriptor_set->set);
+    vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
+
+    fullscreen_triangle_pipeline = pipeline_builder.create_graphics_pipeline(
+        "fullscreen_tri.vert.spv", "tex_sample.frag.spv",
+        {sampled_image_descriptor_set->layout}, fullscreen_tri_render_pass,
+        vkb_swapchain.extent);
+
+    VK::CommandBuffer init_commands(vk_device, *graphics_queue);
+    init_commands.begin();
+    VkImageSubresourceRange subresource_range{};
+    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresource_range.baseMipLevel = 0;
+    subresource_range.levelCount = 1;
+    subresource_range.baseArrayLayer = 0;
+    subresource_range.layerCount = 1;
+
+    VK::set_image_layout(init_commands.get(), sampled_image->image.handle,
+                         VK_IMAGE_LAYOUT_UNDEFINED,
+                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         subresource_range);
+    init_commands.end();
+    VK::Fence work_fence(vk_device);
+    graphics_queue->submit(init_commands, work_fence);
+    work_fence.wait();
     return init;
 }
-
 bool RVPT::update() { return true; }
 
 RVPT::draw_return RVPT::draw()
@@ -27,9 +79,6 @@ RVPT::draw_return RVPT::draw()
 
     current_frame.command_fence.wait();
     current_frame.command_buffer.reset();
-    current_frame.command_buffer.begin();
-    // record drawing commands
-    current_frame.command_buffer.end();
 
     uint32_t swapchain_image_index;
     VkResult result =
@@ -47,6 +96,43 @@ RVPT::draw_return RVPT::draw()
         std::cerr << "Failed to acquire next swapchain image\n";
         assert(false);
     }
+
+    current_frame.command_buffer.begin();
+
+    VkClearValue background_color = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    VkRenderPassBeginInfo rp_begin_info{};
+    rp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rp_begin_info.renderPass = fullscreen_tri_render_pass;
+    rp_begin_info.framebuffer =
+        framebuffers.at(swapchain_image_index).framebuffer.handle;
+    rp_begin_info.renderArea.offset = {0, 0};
+    rp_begin_info.renderArea.extent = vkb_swapchain.extent;
+    rp_begin_info.clearValueCount = 1;
+    rp_begin_info.pClearValues = &background_color;
+
+    VkCommandBuffer cmd_buf = current_frame.command_buffer.get();
+
+    VkViewport viewport{0.0f,
+                        0.0f,
+                        static_cast<float>(vkb_swapchain.extent.width),
+                        static_cast<float>(vkb_swapchain.extent.height),
+                        0.0f,
+                        1.0f};
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    vkCmdBeginRenderPass(cmd_buf, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      fullscreen_triangle_pipeline.pipeline);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            fullscreen_triangle_pipeline.layout, 0, 1,
+                            &sampled_image_descriptor_set->set, 0, nullptr);
+    vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+    vkCmdEndRenderPass(cmd_buf);
+    current_frame.command_buffer.end();
 
     if (frames_inflight_fences[swapchain_image_index] != nullptr)
     {
@@ -83,9 +169,18 @@ void RVPT::shutdown()
     graphics_queue->wait_idle();
     present_queue->wait_idle();
 
-    frame_resources.clear();
+    sampled_image_pool.reset();
+    sampled_image.reset();
 
+    VK::destroy_render_pass(vk_device, fullscreen_tri_render_pass);
+
+    framebuffers.clear();
+
+    frame_resources.clear();
     vkb_swapchain.destroy_image_views(swapchain_image_views);
+
+    memory_allocator.shutdown();
+    pipeline_builder.shutdown();
     vkb::destroy_swapchain(vkb_swapchain);
     vkb::destroy_device(context.device);
     vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
@@ -119,10 +214,14 @@ bool RVPT::context_init()
         std::cerr << "Failed to create a surface" << '\n';
         return false;
     }
+    VkPhysicalDeviceFeatures required_features{};
+    required_features.samplerAnisotropy = true;
 
     vkb::PhysicalDeviceSelector selector(context.inst);
-    auto phys_ret =
-        selector.set_surface(context.surf).set_minimum_version(1, 1).select();
+    auto phys_ret = selector.set_surface(context.surf)
+                        .set_required_features(required_features)
+                        .set_minimum_version(1, 1)
+                        .select();
 
     if (!phys_ret)
     {
@@ -190,6 +289,7 @@ bool RVPT::swapchain_init()
 
 bool RVPT::swapchain_reinit()
 {
+    framebuffers.clear();
     vkb_swapchain.destroy_image_views(swapchain_image_views);
 
     vkb::SwapchainBuilder swapchain_builder(context.device);
@@ -201,7 +301,9 @@ bool RVPT::swapchain_reinit()
         return false;
     }
     vkb_swapchain = ret.value();
-    return swapchain_get_images();
+    bool out_bool = swapchain_get_images();
+    create_framebuffers();
+    return out_bool;
 }
 
 bool RVPT::swapchain_get_images()
@@ -221,4 +323,14 @@ bool RVPT::swapchain_get_images()
     swapchain_image_views = swapchain_image_views_ret.value();
 
     return true;
+}
+
+void RVPT::create_framebuffers()
+{
+    for (uint32_t i = 0; i < vkb_swapchain.image_count; i++)
+    {
+        std::vector<VkImageView> image_views = {swapchain_image_views[i]};
+        framebuffers.emplace_back(vk_device, fullscreen_tri_render_pass,
+                                  vkb_swapchain.extent, image_views);
+    }
 }
