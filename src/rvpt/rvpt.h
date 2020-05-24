@@ -65,14 +65,14 @@ class RVPT
     std::optional<VK::Queue> compute_queue;
 
     VK::PipelineBuilder pipeline_builder;
-    VK::Memory memory_allocator;
+    VK::MemoryAllocator memory_allocator;
 
     vkb::Swapchain vkb_swapchain;
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
 
     uint32_t current_frame_index = 0;
-    std::vector<VK::FrameResources> frame_resources;
+    std::vector<VK::SyncResources> sync_resources;
     std::vector<VkFence> frames_inflight_fences;
 
     VkRenderPass fullscreen_tri_render_pass;
@@ -84,10 +84,19 @@ class RVPT
     std::optional<VK::DescriptorPool> sampled_image_pool;
     std::optional<VK::DescriptorSet> sampled_image_descriptor_set;
 
+    std::optional<VK::DescriptorPool> compute_descriptor_pool;
+    std::optional<VK::DescriptorSet> compute_descriptor_set;
+    VK::Pipeline compute_pipeline;
+    std::optional<VK::CommandBuffer> compute_command_buffer;
+    std::optional<VK::Fence> compute_work_fence;
     // helper functions
     bool context_init();
     bool swapchain_init();
     bool swapchain_reinit();
     bool swapchain_get_images();
     void create_framebuffers();
+
+    void record_command_buffer(VK::SyncResources& current_frame,
+                               uint32_t swapchain_image_index);
+    void record_compute_command_buffer();
 };

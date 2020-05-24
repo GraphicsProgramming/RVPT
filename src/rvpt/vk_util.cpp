@@ -263,8 +263,8 @@ void CommandBuffer::reset()
 }
 
 // Frame Resources
-FrameResources::FrameResources(VkDevice device, Queue& graphics_queue,
-                               Queue& present_queue, VkSwapchainKHR swapchain)
+SyncResources::SyncResources(VkDevice device, Queue& graphics_queue,
+                             Queue& present_queue, VkSwapchainKHR swapchain)
     : graphics_queue(graphics_queue),
       present_queue(present_queue),
       swapchain(swapchain),
@@ -275,13 +275,13 @@ FrameResources::FrameResources(VkDevice device, Queue& graphics_queue,
 {
 }
 
-void FrameResources::submit()
+void SyncResources::submit()
 {
     graphics_queue.submit(command_buffer, command_fence, image_avail_sem,
                           render_finish_sem,
                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 }
-VkResult FrameResources::present(uint32_t image_index)
+VkResult SyncResources::present(uint32_t image_index)
 {
     VkSemaphore wait_sem = render_finish_sem.get();
     VkPresentInfoKHR presentInfo{};
@@ -623,8 +623,8 @@ Pipeline PipelineBuilder::create_graphics_pipeline(
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -689,10 +689,25 @@ Pipeline PipelineBuilder::create_compute_pipeline(
 {
     Pipeline pipeline;
 
-    VkComputePipelineCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    auto compute_code = load_spirv(compute_shader);
+    assert(compute_code.size());
+
+    ShaderModule compute_module(device, compute_code);
+
+    VkPipelineShaderStageCreateInfo compute_shader_create_info{
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        nullptr,
+        0,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        compute_module.module.handle,
+        "main"};
 
     create_pipeline_layout(pipeline, descriptor_layouts);
+
+    VkComputePipelineCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    create_info.stage = compute_shader_create_info;
+    create_info.layout = pipeline.layout;
 
     VK_CHECK_RESULT(vkCreateComputePipelines(device, cache, 1, &create_info,
                                              nullptr, &pipeline.pipeline));
@@ -725,19 +740,21 @@ void PipelineBuilder::create_pipeline_layout(
 }
 
 // Memory
-Memory::Memory(VkPhysicalDevice physical_device, VkDevice device)
+MemoryAllocator::MemoryAllocator(VkPhysicalDevice physical_device,
+                                 VkDevice device)
     : physical_device(physical_device), device(device)
 {
     vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
 }
 
-void Memory::shutdown()
+void MemoryAllocator::shutdown()
 {
     image_allocations.clear();
     buffer_allocations.clear();
 }
 
-bool Memory::allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage)
+bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size,
+                                     MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetImageMemoryRequirements(device, image, &memory_requirements);
@@ -753,8 +770,8 @@ bool Memory::allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage)
     return true;
 }
 
-bool Memory::allocate_buffer(VkBuffer buffer, VkDeviceSize size,
-                             MemoryUsage usage)
+bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size,
+                                      MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, buffer, &memory_requirements);
@@ -770,7 +787,7 @@ bool Memory::allocate_buffer(VkBuffer buffer, VkDeviceSize size,
     return true;
 }
 
-void Memory::free(VkImage image)
+void MemoryAllocator::free(VkImage image)
 {
     auto it =
         std::find_if(std::begin(image_allocations), std::end(image_allocations),
@@ -781,7 +798,7 @@ void Memory::free(VkImage image)
         image_allocations.erase(it);
     }
 }
-void Memory::free(VkBuffer buffer)
+void MemoryAllocator::free(VkBuffer buffer)
 {
     auto it = std::find_if(
         std::begin(buffer_allocations), std::end(buffer_allocations),
@@ -793,7 +810,8 @@ void Memory::free(VkBuffer buffer)
     }
 }
 
-VkMemoryPropertyFlags Memory::get_memory_property_flags(MemoryUsage usage)
+VkMemoryPropertyFlags MemoryAllocator::get_memory_property_flags(
+    MemoryUsage usage)
 {
     switch (usage)
     {
@@ -810,8 +828,9 @@ VkMemoryPropertyFlags Memory::get_memory_property_flags(MemoryUsage usage)
     }
 }
 
-HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> Memory::create_device_memory(
-    VkDeviceSize max_size, uint32_t memory_type_index)
+HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory>
+MemoryAllocator::create_device_memory(VkDeviceSize max_size,
+                                      uint32_t memory_type_index)
 {
     VkMemoryAllocateInfo allocation_info{};
     allocation_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -825,8 +844,8 @@ HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> Memory::create_device_memory(
     return HandleWrapper(device, memory, vkFreeMemory);
 }
 
-uint32_t Memory::find_memory_type(uint32_t typeFilter,
-                                  VkMemoryPropertyFlags properties)
+uint32_t MemoryAllocator::find_memory_type(uint32_t typeFilter,
+                                           VkMemoryPropertyFlags properties)
 {
     for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++)
     {
@@ -840,8 +859,8 @@ uint32_t Memory::find_memory_type(uint32_t typeFilter,
     assert(false && "failed to find suitable memory type!");
     return 0;
 }
-Memory::Pool::Pool(VkDevice device, VkDeviceMemory device_memory,
-                   VkDeviceSize max_size)
+MemoryAllocator::Pool::Pool(VkDevice device, VkDeviceMemory device_memory,
+                            VkDeviceSize max_size)
     : device_memory(HandleWrapper(device, device_memory, vkFreeMemory)),
       max_size(max_size)
 {
@@ -911,10 +930,10 @@ auto create_sampler(VkDevice device)
     return HandleWrapper(device, sampler, vkDestroySampler);
 }
 
-Image::Image(VkDevice device, Memory& memory, VkFormat format,
-             VkImageTiling tiling, uint32_t width, uint32_t height,
-             VkImageUsageFlags usage, VkDeviceSize size,
-             MemoryUsage memory_usage)
+Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue,
+             VkFormat format, VkImageTiling tiling, uint32_t width,
+             uint32_t height, VkImageUsageFlags usage, VkImageLayout layout,
+             VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       image(create_image(device, format, tiling, {width, height, 1}, usage)),
       successfully_got_memory(
@@ -922,15 +941,26 @@ Image::Image(VkDevice device, Memory& memory, VkFormat format,
       image_view(create_image_view(device, image.handle, format)),
       sampler(create_sampler(device)),
       format(format),
-      layout(VK_IMAGE_LAYOUT_UNDEFINED)
+      layout(layout),
+      width(width),
+      height(height)
 {
+    // no need to change layout
+    if (layout == VK_IMAGE_LAYOUT_UNDEFINED) return;
+    Fence fence(device);
+    CommandBuffer cmd_buf(device, queue);
+    cmd_buf.begin();
+    set_image_layout(cmd_buf.get(), image.handle, VK_IMAGE_LAYOUT_UNDEFINED,
+                     layout, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+    cmd_buf.end();
+    queue.submit(cmd_buf, fence);
+    fence.wait();
 }
 Image::~Image() { memory_ptr->free(image.handle); }
 
 VkDescriptorImageInfo Image::descriptor_info() const
 {
-    return {sampler.handle, image_view.handle,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    return {sampler.handle, image_view.handle, layout};
 }
 
 // Buffer
@@ -949,8 +979,9 @@ auto create_buffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
     return HandleWrapper(device, buffer, vkDestroyBuffer);
 }
 
-Buffer::Buffer(VkDevice device, Memory& memory, VkBufferUsageFlags usage,
-               VkDeviceSize size, MemoryUsage memory_usage)
+Buffer::Buffer(VkDevice device, MemoryAllocator& memory,
+               VkBufferUsageFlags usage, VkDeviceSize size,
+               MemoryUsage memory_usage)
     : buffer(create_buffer(device, size, usage)), memory_ptr(&memory)
 {
     memory.allocate_buffer(buffer.handle, size, memory_usage);

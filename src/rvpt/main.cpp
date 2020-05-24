@@ -9,8 +9,8 @@
 int main()
 {
     window::settings settings;
-    settings.height = 512;
-    settings.width = 512;
+    settings.height = 1024;
+    settings.width = 1024;
     window window(settings);
     RVPT rvpt(window);
     bool rvpt_init_ret = rvpt.initialize();

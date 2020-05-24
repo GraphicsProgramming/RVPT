@@ -8,15 +8,15 @@ bool RVPT::initialize()
 {
     bool init = context_init();
     pipeline_builder = VK::PipelineBuilder(vk_device);
-    memory_allocator =
-        VK::Memory(context.device.physical_device.physical_device, vk_device);
+    memory_allocator = VK::MemoryAllocator(
+        context.device.physical_device.physical_device, vk_device);
 
     init &= swapchain_init();
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        frame_resources.emplace_back(vk_device, graphics_queue.value(),
-                                     present_queue.value(),
-                                     vkb_swapchain.swapchain);
+        sync_resources.emplace_back(vk_device, graphics_queue.value(),
+                                    present_queue.value(),
+                                    vkb_swapchain.swapchain);
     }
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
 
@@ -25,11 +25,14 @@ bool RVPT::initialize()
 
     create_framebuffers();
 
+    // output image
+
     sampled_image.emplace(
-        vk_device, memory_allocator, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_TILING_LINEAR, 512, 512,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
+        vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_TILING_OPTIMAL, 512, 512,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_LAYOUT_GENERAL, static_cast<VkDeviceSize>(512 * 512 * 4),
+        VK::MemoryUsage::gpu);
 
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
@@ -52,30 +55,50 @@ bool RVPT::initialize()
         {sampled_image_descriptor_set->layout}, fullscreen_tri_render_pass,
         vkb_swapchain.extent);
 
-    VK::CommandBuffer init_commands(vk_device, *graphics_queue);
-    init_commands.begin();
-    VkImageSubresourceRange subresource_range{};
-    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subresource_range.baseMipLevel = 0;
-    subresource_range.levelCount = 1;
-    subresource_range.baseArrayLayer = 0;
-    subresource_range.layerCount = 1;
+    // Compute
 
-    VK::set_image_layout(init_commands.get(), sampled_image->image.handle,
-                         VK_IMAGE_LAYOUT_UNDEFINED,
-                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                         subresource_range);
-    init_commands.end();
-    VK::Fence work_fence(vk_device);
-    graphics_queue->submit(init_commands, work_fence);
-    work_fence.wait();
+    std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+         nullptr}};
+
+    compute_descriptor_pool.emplace(vk_device, compute_layout_bindings, 1);
+    compute_descriptor_set = compute_descriptor_pool->allocate();
+
+    std::vector<VkDescriptorImageInfo> compute_descriptor_info = {
+        sampled_image->descriptor_info()};
+    VK::DescriptorUse compute_descriptor_use{
+        0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, compute_descriptor_info};
+
+    auto compute_write_descriptor =
+        compute_descriptor_use.get_write_descriptor_set(
+            compute_descriptor_set->set);
+    vkUpdateDescriptorSets(vk_device, 1, &compute_write_descriptor, 0, nullptr);
+
+    compute_pipeline = pipeline_builder.create_compute_pipeline(
+        "compute_pass.comp.spv", {compute_descriptor_set->layout});
+
+    compute_command_buffer.emplace(vk_device, compute_queue.has_value()
+                                                  ? *compute_queue
+                                                  : *graphics_queue);
+    compute_work_fence.emplace(vk_device);
+
     return init;
 }
 bool RVPT::update() { return true; }
 
 RVPT::draw_return RVPT::draw()
 {
-    auto& current_frame = frame_resources[current_frame_index];
+    compute_work_fence->wait();
+    compute_work_fence->reset();
+
+    record_compute_command_buffer();
+
+    VK::Queue& compute_submit =
+        compute_queue.has_value() ? *compute_queue : *graphics_queue;
+    compute_submit.submit(compute_command_buffer.value(),
+                          compute_work_fence.value());
+
+    auto& current_frame = sync_resources[current_frame_index];
 
     current_frame.command_fence.wait();
     current_frame.command_buffer.reset();
@@ -96,43 +119,7 @@ RVPT::draw_return RVPT::draw()
         std::cerr << "Failed to acquire next swapchain image\n";
         assert(false);
     }
-
-    current_frame.command_buffer.begin();
-
-    VkClearValue background_color = {0.0f, 0.0f, 0.0f, 1.0f};
-
-    VkRenderPassBeginInfo rp_begin_info{};
-    rp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rp_begin_info.renderPass = fullscreen_tri_render_pass;
-    rp_begin_info.framebuffer =
-        framebuffers.at(swapchain_image_index).framebuffer.handle;
-    rp_begin_info.renderArea.offset = {0, 0};
-    rp_begin_info.renderArea.extent = vkb_swapchain.extent;
-    rp_begin_info.clearValueCount = 1;
-    rp_begin_info.pClearValues = &background_color;
-
-    VkCommandBuffer cmd_buf = current_frame.command_buffer.get();
-
-    VkViewport viewport{0.0f,
-                        0.0f,
-                        static_cast<float>(vkb_swapchain.extent.width),
-                        static_cast<float>(vkb_swapchain.extent.height),
-                        0.0f,
-                        1.0f};
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-
-    VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
-
-    vkCmdBeginRenderPass(cmd_buf, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      fullscreen_triangle_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            fullscreen_triangle_pipeline.layout, 0, 1,
-                            &sampled_image_descriptor_set->set, 0, nullptr);
-    vkCmdDraw(cmd_buf, 3, 1, 0, 0);
-    vkCmdEndRenderPass(cmd_buf);
-    current_frame.command_buffer.end();
+    record_command_buffer(current_frame, swapchain_image_index);
 
     if (frames_inflight_fences[swapchain_image_index] != nullptr)
     {
@@ -159,7 +146,7 @@ RVPT::draw_return RVPT::draw()
         std::cerr << "Failed to present swapchain image\n";
         assert(false);
     }
-    current_frame_index = (current_frame_index + 1) % frame_resources.size();
+    current_frame_index = (current_frame_index + 1) % sync_resources.size();
     return draw_return::success;
 }
 
@@ -169,6 +156,11 @@ void RVPT::shutdown()
     graphics_queue->wait_idle();
     present_queue->wait_idle();
 
+    compute_work_fence.reset();
+    compute_command_buffer.reset();
+
+    compute_descriptor_pool.reset();
+
     sampled_image_pool.reset();
     sampled_image.reset();
 
@@ -176,7 +168,7 @@ void RVPT::shutdown()
 
     framebuffers.clear();
 
-    frame_resources.clear();
+    sync_resources.clear();
     vkb_swapchain.destroy_image_views(swapchain_image_views);
 
     memory_allocator.shutdown();
@@ -327,10 +319,84 @@ bool RVPT::swapchain_get_images()
 
 void RVPT::create_framebuffers()
 {
+    framebuffers.clear();
     for (uint32_t i = 0; i < vkb_swapchain.image_count; i++)
     {
         std::vector<VkImageView> image_views = {swapchain_image_views[i]};
         framebuffers.emplace_back(vk_device, fullscreen_tri_render_pass,
                                   vkb_swapchain.extent, image_views);
     }
+}
+
+void RVPT::record_command_buffer(VK::SyncResources& current_frame,
+                                 uint32_t swapchain_image_index)
+{
+    current_frame.command_buffer.begin();
+    VkCommandBuffer cmd_buf = current_frame.command_buffer.get();
+
+    // Image memory barrier to make sure that compute shader writes are finished
+    // before sampling from the texture
+    VkImageMemoryBarrier imageMemoryBarrier = {};
+    imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageMemoryBarrier.image = sampled_image->image.handle;
+    imageMemoryBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
+                                           1};
+    imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK::FLAGS_NONE,
+                         0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+
+    VkClearValue background_color = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    VkRenderPassBeginInfo rp_begin_info{};
+    rp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rp_begin_info.renderPass = fullscreen_tri_render_pass;
+    rp_begin_info.framebuffer =
+        framebuffers.at(swapchain_image_index).framebuffer.handle;
+    rp_begin_info.renderArea.offset = {0, 0};
+    rp_begin_info.renderArea.extent = vkb_swapchain.extent;
+    rp_begin_info.clearValueCount = 1;
+    rp_begin_info.pClearValues = &background_color;
+
+    vkCmdBeginRenderPass(cmd_buf, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{0.0f,
+                        0.0f,
+                        static_cast<float>(vkb_swapchain.extent.width),
+                        static_cast<float>(vkb_swapchain.extent.height),
+                        0.0f,
+                        1.0f};
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      fullscreen_triangle_pipeline.pipeline);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            fullscreen_triangle_pipeline.layout, 0, 1,
+                            &sampled_image_descriptor_set->set, 0, nullptr);
+    vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+    vkCmdEndRenderPass(cmd_buf);
+    current_frame.command_buffer.end();
+}
+
+void RVPT::record_compute_command_buffer()
+{
+    compute_command_buffer->begin();
+    VkCommandBuffer cmd_buf = compute_command_buffer->get();
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      compute_pipeline.pipeline);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            compute_pipeline.layout, 0, 1,
+                            &compute_descriptor_set->set, 0, 0);
+
+    vkCmdDispatch(cmd_buf, sampled_image->width / 16,
+                  sampled_image->height / 16, 1);
+
+    compute_command_buffer->end();
 }

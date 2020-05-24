@@ -27,6 +27,8 @@ const char* error_str(const VkResult result);
         }                                                                 \
     }
 
+constexpr uint32_t FLAGS_NONE = 0;
+
 template <typename T, typename Deleter>
 class HandleWrapper
 {
@@ -152,11 +154,11 @@ class CommandBuffer
     VkCommandBuffer command_buffer;
 };
 
-class FrameResources
+class SyncResources
 {
    public:
-    explicit FrameResources(VkDevice device, Queue& graphics_queue,
-                            Queue& present_queue, VkSwapchainKHR swapchain);
+    explicit SyncResources(VkDevice device, Queue& graphics_queue,
+                           Queue& present_queue, VkSwapchainKHR swapchain);
 
     void submit();
     VkResult present(uint32_t image_index);
@@ -281,11 +283,11 @@ enum class MemoryUsage
     cpu,
     transfer_to_gpu
 };
-class Memory
+class MemoryAllocator
 {
    public:
-    Memory() {}
-    explicit Memory(VkPhysicalDevice physical_device, VkDevice device);
+    MemoryAllocator() {}
+    explicit MemoryAllocator(VkPhysicalDevice physical_device, VkDevice device);
 
     void shutdown();
 
@@ -337,15 +339,16 @@ class Memory
 class Image
 {
    public:
-    explicit Image(VkDevice device, Memory& memory, VkFormat format,
-                   VkImageTiling tiling, uint32_t width, uint32_t height,
-                   VkImageUsageFlags usage, VkDeviceSize size,
+    explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue,
+                   VkFormat format, VkImageTiling tiling, uint32_t width,
+                   uint32_t height, VkImageUsageFlags usage,
+                   VkImageLayout layout, VkDeviceSize size,
                    MemoryUsage memory_usage);
     ~Image();
 
     VkDescriptorImageInfo descriptor_info() const;
 
-    Memory* memory_ptr;
+    MemoryAllocator* memory_ptr;
     HandleWrapper<VkImage, PFN_vkDestroyImage> image;
     bool successfully_got_memory;
     HandleWrapper<VkImageView, PFN_vkDestroyImageView> image_view;
@@ -353,18 +356,21 @@ class Image
 
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    uint32_t width;
+    uint32_t height;
 };
 
 class Buffer
 {
    public:
-    explicit Buffer(VkDevice device, Memory& memory, VkBufferUsageFlags usage,
-                    VkDeviceSize size, MemoryUsage memory_usage);
+    explicit Buffer(VkDevice device, MemoryAllocator& memory,
+                    VkBufferUsageFlags usage, VkDeviceSize size,
+                    MemoryUsage memory_usage);
     ~Buffer();
 
     VkDescriptorBufferInfo descriptor_info() const;
 
-    Memory* memory_ptr;
+    MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
     VkDeviceSize size;
 };
