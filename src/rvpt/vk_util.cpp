@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <cstring>
 namespace VK
 {
 const char* error_str(const VkResult result)

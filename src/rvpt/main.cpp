@@ -9,7 +9,7 @@
 int main()
 {
     window::settings settings;
-    settings.height = 1024;
+    settings.height = 512;
     settings.width = 1024;
     window window(settings);
     RVPT rvpt(window);
