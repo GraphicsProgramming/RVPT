@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-window::window(window::settings settings) : active_settings(settings)
+Window::Window(Window::Settings settings) : active_settings(settings)
 {
     // Initializing glfw and a window
     auto glfw_ret = glfwInit();
@@ -20,14 +20,14 @@ window::window(window::settings settings) : active_settings(settings)
         std::cerr << "Failed to create a glfw window" << '\n';
 }
 
-window::~window()
+Window::~Window()
 {
     glfwDestroyWindow(window_ptr);
     glfwTerminate();
 }
 
-window::settings window::get_settings() { return active_settings; }
+Window::Settings Window::get_settings() { return active_settings; }
 
-GLFWwindow* window::get_window_pointer() { return window_ptr; }
+GLFWwindow* Window::get_window_pointer() { return window_ptr; }
 
-bool window::should_close() { return glfwWindowShouldClose(window_ptr); }
+bool Window::should_close() { return glfwWindowShouldClose(window_ptr); }

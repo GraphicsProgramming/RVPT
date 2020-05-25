@@ -20,7 +20,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 class RVPT
 {
    public:
-    explicit RVPT(window& window);
+    explicit RVPT(Window& window);
     ~RVPT();
 
     RVPT(RVPT const& other) = delete;
@@ -44,7 +44,7 @@ class RVPT
     void shutdown();
 
    private:
-    window& window_ref;
+    Window& window_ref;
 
     // from a callback
     bool framebuffer_resized = false;

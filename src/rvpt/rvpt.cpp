@@ -1,6 +1,6 @@
 #include "rvpt.h"
 
-RVPT::RVPT(window& window) : window_ref(window) {}
+RVPT::RVPT(Window& window) : window_ref(window) {}
 
 RVPT::~RVPT() {}
 

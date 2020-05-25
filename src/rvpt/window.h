@@ -6,10 +6,10 @@
 
 #include <GLFW/glfw3.h>
 
-class window
+class Window
 {
    public:
-    struct settings
+    struct Settings
     {
         int width = 800;
         int height = 600;
@@ -19,15 +19,15 @@ class window
         bool vsync = true;
     };
 
-    explicit window(settings settings);
-    ~window();
+    explicit Window(Settings settings);
+    ~Window();
 
-    settings get_settings();
+    Settings get_settings();
     GLFWwindow* get_window_pointer();
 
     bool should_close();
 
    private:
-    settings active_settings;
+    Settings active_settings;
     GLFWwindow* window_ptr;
 };
