@@ -13,6 +13,7 @@ int main()
     settings.width = 1024;
     window window(settings);
     RVPT rvpt(window);
+
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
     {

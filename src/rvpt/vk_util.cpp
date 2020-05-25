@@ -537,6 +537,7 @@ std::vector<uint32_t> load_spirv(std::string const& filename)
                        std::ios::ate | std::ios::binary);
     if (!file.is_open())
     {
+        std::cerr << "Failed to open file: " + filename << '\n';
         return {};
     }
     size_t file_size = (size_t)file.tellg();

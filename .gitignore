@@ -1,9 +1,10 @@
 # Directories
 .idea
-cmake-build-*
 .vscode
+cmake-build-*
+
 # Files
-project_configuration.json
 CMakeCache.txt
-rvpt
+project_configuration.json
 RVPT.cbp
+rvpt
