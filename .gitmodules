@@ -12,3 +12,6 @@
 [submodule "external/nlohmann-json"]
 	path = external/nlohmann-json
 	url = https://github.com/nlohmann/json
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui
