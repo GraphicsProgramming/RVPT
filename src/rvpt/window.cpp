@@ -21,7 +21,9 @@ Window::Window(Window::Settings settings) : active_settings(settings)
 
     glfwSetWindowUserPointer(window_ptr, this);
     glfwSetKeyCallback(window_ptr, key_callback);
-    glfwSetMouseButtonCallback(window_ptr, mouse_callback);
+    glfwSetMouseButtonCallback(window_ptr, mouse_click_callback);
+    glfwSetCursorPosCallback(window_ptr, mouse_move_callback);
+    glfwSetScrollCallback(window_ptr, scroll_callback);
 }
 
 Window::~Window()
@@ -40,9 +42,19 @@ void Window::add_key_callback(std::function<void (int, Action)> callback)
     key_callbacks.push_back(callback);
 }
 
-void Window::add_mouse_callback(std::function<void (float, float, Mouse, Action)> callback)
+void Window::add_mouse_click_callback(std::function<void(Mouse, Action)> callback)
 {
-    mouse_callbacks.push_back(callback);
+    mouse_click_callbacks.push_back(callback);
+}
+
+void Window::add_mouse_move_callback(std::function<void(float, float)> callback)
+{
+    mouse_move_callbacks.push_back(callback);
+}
+
+void Window::add_scroll_callback(std::function<void(float x, float y)> callback)
+{
+    scroll_callbacks.push_back(callback);
 }
 
 void Window::key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -67,10 +79,8 @@ void Window::key_callback(GLFWwindow *window, int key, int scancode, int action,
         callback(key, callback_action);
 }
 
-void Window::mouse_callback(GLFWwindow *window, int button, int action, int mods)
+void Window::mouse_click_callback(GLFWwindow *window, int button, int action, int mods)
 {
-    double xpos, ypos;
-    glfwGetCursorPos(window, &xpos, &ypos);
     Action callback_action;
     switch(action)
     {
@@ -102,8 +112,22 @@ void Window::mouse_callback(GLFWwindow *window, int button, int action, int mods
             mouse_button = Mouse::OTHER;
     }
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for(auto& callback : window_ptr->mouse_callbacks)
-        callback(xpos, ypos, mouse_button, callback_action);
+    for(auto& callback : window_ptr->mouse_click_callbacks)
+        callback(mouse_button, callback_action);
+}
+
+void Window::mouse_move_callback(GLFWwindow *window, double x, double y)
+{
+    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    for(auto& callback : window_ptr->mouse_move_callbacks)
+        callback(x, y);
+}
+
+void Window::scroll_callback(GLFWwindow *window, double x, double y)
+{
+    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    for(auto& callback : window_ptr->scroll_callbacks)
+        callback(x, y);
 }
 
 Window::Settings Window::get_settings() { return active_settings; }
