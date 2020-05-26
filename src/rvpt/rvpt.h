@@ -90,7 +90,7 @@ class RVPT
     std::optional<VK::CommandBuffer> compute_command_buffer;
     std::optional<VK::Fence> compute_work_fence;
 
-    std::optional<VK::Buffer> uniform_buffer;
+    std::optional<VK::Buffer> camera_matrix_uniform_buffer;
 
     // helper functions
     bool context_init();

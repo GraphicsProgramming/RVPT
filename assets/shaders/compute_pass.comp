@@ -5,8 +5,7 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(binding = 0, rgba8) uniform writeonly image2D result_image;
-layout(binding = 1) uniform Background { vec4 color; }
-background;
+layout(binding = 1) uniform CameraMatrix {mat4 matrix; } cameraMatrix;
 
 // Global Variables //
 ivec2 dim = imageSize(result_image);
@@ -38,15 +37,16 @@ bool intersect_spheres(Ray ray)
 
 Ray get_ray(vec2 pixel)
 {
-    return Ray(cam.origin, normalize((cam.center + cam.horizontal * pixel.x +
-                                      cam.vertical * pixel.y) -
-                                     cam.origin));
+    vec3 origin = (vec4((cam.origin), 1) * cameraMatrix.matrix).xyz;
+    vec3 lookat = (vec4(normalize((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y) - cam.origin), 0) * cameraMatrix.matrix).xyz;
+//    return Ray(origin, normalize((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y) -cam.origin));
+    return Ray(origin, normalize((vec3(vec4(pixel.x, pixel.y, 1, 1) * cameraMatrix.matrix))));
 }
 
 void main()
 {
     // Setup Scene //
-    spheres[0] = Sphere(vec3(0.0f, 0.0f, 0.0f), 2.0f);
+    spheres[0] = Sphere(vec3(0.0f, 0.0f, 0.0f), 1.0f);
     // End Scene Setup //
 
     // Setup Camera //
@@ -77,9 +77,10 @@ void main()
 
     vec4 final_color;
     if (intersect_spheres(ray))
-        final_color = vec4(1, 1, 1, 0);
+//        final_color = vec4(1, 1, 1, 0);
+        final_color = vec4(cameraMatrix.matrix);
     else
-        final_color = background.color;  // vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
+        final_color = vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
 
     imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), final_color);
 }

@@ -1,6 +1,7 @@
 #include "rvpt.h"
 
 #include <glm/glm.hpp>
+#include <glm/glm/ext.hpp>
 
 RVPT::RVPT(Window& window) : window_ref(window) {}
 
@@ -59,12 +60,12 @@ bool RVPT::initialize()
 
     // Compute
 
-    uniform_buffer.emplace(vk_device, memory_allocator,
-                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 16,
+    camera_matrix_uniform_buffer.emplace(vk_device, memory_allocator,
+                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 64,
                            VK::MemoryUsage::cpu_to_gpu);
-    uniform_buffer->map();
-    glm::vec4 background_color{0.2f, 0.3f, 0.4f, 0.5f};
-    uniform_buffer->copy_to(background_color);
+    camera_matrix_uniform_buffer->map();
+    glm::mat4 translationMatrix = glm::mat4();
+    camera_matrix_uniform_buffer->copy_to(translationMatrix);
 
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT,
@@ -79,7 +80,7 @@ bool RVPT::initialize()
         0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, image_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> buffer_descriptor_info = {
-        uniform_buffer->descriptor_info()};
+        camera_matrix_uniform_buffer->descriptor_info()};
     VK::DescriptorUse buffer_descriptor_use{
         1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer_descriptor_info};
 
@@ -173,7 +174,7 @@ void RVPT::shutdown()
     graphics_queue->wait_idle();
     present_queue->wait_idle();
 
-    uniform_buffer.reset();
+    camera_matrix_uniform_buffer.reset();
 
     compute_work_fence.reset();
     compute_command_buffer.reset();
