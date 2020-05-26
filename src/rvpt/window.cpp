@@ -15,13 +15,16 @@ Window::Window(Window::Settings settings) : active_settings(settings)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window_ptr = glfwCreateWindow(settings.width, settings.height, settings.title, nullptr, nullptr);
-    if (window_ptr == nullptr) std::cerr << "Failed to create a glfw window" << '\n';
-
-    glfwSetWindowUserPointer(window_ptr, this);
-    glfwSetKeyCallback(window_ptr, key_callback);
-    glfwSetMouseButtonCallback(window_ptr, mouse_click_callback);
-    glfwSetCursorPosCallback(window_ptr, mouse_move_callback);
-    glfwSetScrollCallback(window_ptr, scroll_callback);
+    if (window_ptr == nullptr)
+        std::cerr << "Failed to create a glfw window" << '\n';
+    else
+    {
+        glfwSetWindowUserPointer(window_ptr, this);
+        glfwSetKeyCallback(window_ptr, key_callback);
+        glfwSetMouseButtonCallback(window_ptr, mouse_click_callback);
+        glfwSetCursorPosCallback(window_ptr, mouse_move_callback);
+        glfwSetScrollCallback(window_ptr, scroll_callback);
+    }
 }
 
 Window::~Window()
