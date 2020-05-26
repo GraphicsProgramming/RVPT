@@ -10,15 +10,23 @@
 
 class Window
 {
-   public:
+public:
     enum class Action
     {
-        RELEASE, PRESS, REPEAT, UNKNOWN
+        RELEASE,
+        PRESS,
+        REPEAT,
+        UNKNOWN
     };
+
     enum class Mouse
     {
-        LEFT, RIGHT, MIDDLE, OTHER
+        LEFT,
+        RIGHT,
+        MIDDLE,
+        OTHER
     };
+
     struct Settings
     {
         int width = 800;
@@ -37,12 +45,13 @@ class Window
     void add_mouse_move_callback(std::function<void(float x, float y)> callback);
     void add_scroll_callback(std::function<void(float x, float y)> callback);
     void poll_events();
+
     Settings get_settings();
     GLFWwindow* get_window_pointer();
 
     bool should_close();
 
-   private:
+private:
     std::vector<std::function<void(int keycode, Action action)>> key_callbacks;
     std::vector<std::function<void(Mouse button, Action action)>> mouse_click_callbacks;
     std::vector<std::function<void(float x, float y)>> mouse_move_callbacks;
