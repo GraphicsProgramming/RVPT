@@ -9,9 +9,10 @@
 int main()
 {
     Window::Settings settings;
-    settings.height = 512;
     settings.width = 1024;
+    settings.height = 512;
     Window window(settings);
+
     RVPT rvpt(window);
 
     bool rvpt_init_ret = rvpt.initialize();
@@ -23,7 +24,7 @@ int main()
 
     while (!window.should_close())
     {
-        glfwPollEvents();
+        window.poll_events();
         rvpt.update();
         rvpt.draw();
     }
