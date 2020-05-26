@@ -22,6 +22,7 @@ class Window
     explicit Window(Settings settings);
     ~Window();
 
+    float get_aspect_ratio();
     Settings get_settings();
     GLFWwindow* get_window_pointer();
 

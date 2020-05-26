@@ -5,12 +5,11 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(binding = 0, rgba8) uniform writeonly image2D result_image;
-layout(binding = 1) uniform CameraMatrix {mat4 matrix; } cameraMatrix;
+layout(binding = 1) uniform Camera {vec3 origin; vec3 center; vec3 horizontal; vec3 vertical; } cam;
 
 // Global Variables //
 ivec2 dim = imageSize(result_image);
 float aspect = float(dim.x) / float(dim.y);
-Camera cam;
 Sphere[1] spheres;
 // End Global Variables //
 
@@ -37,9 +36,7 @@ bool intersect_spheres(Ray ray)
 
 Ray get_ray(vec2 pixel)
 {
-    vec3 origin = (vec4((cam.origin), 1) * cameraMatrix.matrix).xyz;
-    vec3 lookat = (vec4((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y), 1) * cameraMatrix.matrix).xyz;
-    return Ray(origin, normalize(lookat - origin));
+    return Ray(cam.origin, normalize((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y) - cam.origin));
 }
 
 void main()
@@ -48,23 +45,6 @@ void main()
     spheres[0] = Sphere(vec3(0.0f, 0.0f, -10.0f), 1.0f);
     // End Scene Setup //
 
-    // Setup Camera //
-    vec3 look_from = vec3(0.0f, 0.0f, 0.0f);
-    vec3 target = vec3(0.0f, 0.0f, -1.0f);
-    vec3 up = vec3(0.0f, 1.0f, 0.0f);
-    vec3 center, horizontal, vertical;
-    float theta = 90.0f * 3.1415f / 180.0f;
-    float half_width = tan(theta / 2.0f);
-    float half_height = aspect * half_width;
-    vec3 w = normalize(target - look_from);
-    vec3 u = normalize(cross(up, w));
-    vec3 v = cross(w, u);
-    center = look_from + w;
-    horizontal = u * half_width;
-    vertical = v * half_height;
-    cam = Camera(look_from, center, horizontal, vertical);
-    // End Camera Setup //
-
     vec2 uv = vec2(gl_GlobalInvocationID.xy) / dim;
     vec2 ndc = uv * 2.0f - 1.0f;
     Ray ray = get_ray(ndc);
@@ -72,9 +52,8 @@ void main()
     vec4 final_color;
     if (intersect_spheres(ray))
         final_color = vec4(1, 1, 1, 0);
-//        final_color = vec4(cameraMatrix.matrix);
     else
-        final_color = vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
+        final_color = vec4(mix(vec3(0.3, 0.3, 1), vec3(1, 1, 1), uv.y), 0.0);
 
     imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), final_color);
 }

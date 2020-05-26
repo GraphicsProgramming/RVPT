@@ -26,6 +26,11 @@ Window::~Window()
     glfwTerminate();
 }
 
+float Window::get_aspect_ratio()
+{
+    return static_cast<float>(active_settings.width) / active_settings.height;
+}
+
 Window::Settings Window::get_settings() { return active_settings; }
 
 GLFWwindow* Window::get_window_pointer() { return window_ptr; }

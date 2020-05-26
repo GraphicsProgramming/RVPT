@@ -12,6 +12,7 @@
 
 #include <VkBootstrap.h>
 #include "window.h"
+#include "camera.h"
 
 #include "vk_util.h"
 
@@ -42,6 +43,8 @@ class RVPT
     draw_return draw();
 
     void shutdown();
+
+    camera scene_camera;
 
    private:
     Window& window_ref;

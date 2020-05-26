@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/glm/ext.hpp>
 
-RVPT::RVPT(Window& window) : window_ref(window) {}
+RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio()) {}
 
 RVPT::~RVPT() {}
 
@@ -61,11 +61,10 @@ bool RVPT::initialize()
     // Compute
 
     camera_matrix_uniform_buffer.emplace(vk_device, memory_allocator,
-                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 64,
+                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 48,
                            VK::MemoryUsage::cpu_to_gpu);
     camera_matrix_uniform_buffer->map();
-    glm::mat4 translationMatrix = glm::translate(glm::vec3(0, 2, 0));
-    camera_matrix_uniform_buffer->copy_to(translationMatrix);
+    camera_matrix_uniform_buffer->copy_to(scene_camera.get_data());
 
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT,
@@ -108,6 +107,8 @@ RVPT::draw_return RVPT::draw()
 {
     compute_work_fence->wait();
     compute_work_fence->reset();
+
+//    camera_matrix_uniform_buffer->copy_to();
 
     record_compute_command_buffer();
 
