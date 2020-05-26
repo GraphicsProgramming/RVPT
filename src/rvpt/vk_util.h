@@ -281,7 +281,9 @@ enum class MemoryUsage
 {
     gpu,
     cpu,
-    transfer_to_gpu
+    cpu_to_gpu,
+    gpu_to_cpu,
+    cpu_copy
 };
 class MemoryAllocator
 {
@@ -296,6 +298,9 @@ class MemoryAllocator
 
     void free(VkImage image);
     void free(VkBuffer buffer);
+
+    void map(VkBuffer buffer, void** data_ptr);
+    void unmap(VkBuffer buffer);
 
    private:
     // Unused currently
@@ -318,12 +323,14 @@ class MemoryAllocator
     VkDevice device;
     VkPhysicalDeviceMemoryProperties memory_properties;
 
-    std::vector<
-        std::pair<VkImage, HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory>>>
-        image_allocations;
-    std::vector<
-        std::pair<VkBuffer, HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory>>>
-        buffer_allocations;
+    struct Allocation
+    {
+        VkDeviceSize size;
+        HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> memory;
+    };
+
+    std::vector<std::pair<VkImage, Allocation>> image_allocations;
+    std::vector<std::pair<VkBuffer, Allocation>> buffer_allocations;
 
     VkMemoryPropertyFlags get_memory_property_flags(MemoryUsage usage);
 
@@ -368,11 +375,31 @@ class Buffer
                     MemoryUsage memory_usage);
     ~Buffer();
 
+    void map();
+    void unmap();
+
+    template <typename T>
+    void copy_to(std::vector<T> const& data)
+    {
+        copy_to(static_cast<void const*>(data.data()), sizeof(T) * data.size());
+    }
+
+    template <typename T>
+    void copy_to(T const& data)
+    {
+        copy_to(static_cast<void const*>(&data), sizeof(T));
+    }
+
     VkDescriptorBufferInfo descriptor_info() const;
 
+   private:
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
     VkDeviceSize size;
+    bool is_mapped = false;
+    void* mapped_ptr = nullptr;
+
+    void copy_to(void const* pData, size_t size);
 };
 
 void set_image_layout(

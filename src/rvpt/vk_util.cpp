@@ -768,7 +768,8 @@ bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size,
 
     vkBindImageMemory(device, image, device_memory.handle, 0);
 
-    image_allocations.emplace_back(image, std::move(device_memory));
+    Allocation alloc{size, std::move(device_memory)};
+    image_allocations.emplace_back(image, std::move(alloc));
     return true;
 }
 
@@ -781,11 +782,13 @@ bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size,
     uint32_t memory_type = find_memory_type(memory_requirements.memoryTypeBits,
                                             get_memory_property_flags(usage));
 
-    auto device_memory = create_device_memory(size, memory_type);
+    auto device_memory =
+        create_device_memory(memory_requirements.size, memory_type);
 
     vkBindBufferMemory(device, buffer, device_memory.handle, 0);
 
-    buffer_allocations.emplace_back(buffer, std::move(device_memory));
+    Allocation alloc{memory_requirements.size, std::move(device_memory)};
+    buffer_allocations.emplace_back(buffer, std::move(alloc));
     return true;
 }
 
@@ -811,7 +814,29 @@ void MemoryAllocator::free(VkBuffer buffer)
         buffer_allocations.erase(it);
     }
 }
+void MemoryAllocator::map(VkBuffer buffer, void** data_ptr)
+{
+    auto it = std::find_if(
+        std::begin(buffer_allocations), std::end(buffer_allocations),
+        [&](auto const& elem) { return elem.first == buffer; });
 
+    if (it != std::end(buffer_allocations))
+    {
+        vkMapMemory(device, it->second.memory.handle, 0, it->second.size, 0,
+                    data_ptr);
+    }
+}
+void MemoryAllocator::unmap(VkBuffer buffer)
+{
+    auto it = std::find_if(
+        std::begin(buffer_allocations), std::end(buffer_allocations),
+        [&](auto const& elem) { return elem.first == buffer; });
+
+    if (it != std::end(buffer_allocations))
+    {
+        vkUnmapMemory(device, it->second.memory.handle);
+    }
+}
 VkMemoryPropertyFlags MemoryAllocator::get_memory_property_flags(
     MemoryUsage usage)
 {
@@ -822,8 +847,12 @@ VkMemoryPropertyFlags MemoryAllocator::get_memory_property_flags(
         case MemoryUsage::cpu:
             return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        case MemoryUsage::transfer_to_gpu:
+        case MemoryUsage::cpu_to_gpu:
             return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        case MemoryUsage::gpu_to_cpu:
+            return VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        case MemoryUsage::cpu_copy:
+            return VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 
         default:
             return 0;
@@ -984,11 +1013,30 @@ auto create_buffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
 Buffer::Buffer(VkDevice device, MemoryAllocator& memory,
                VkBufferUsageFlags usage, VkDeviceSize size,
                MemoryUsage memory_usage)
-    : buffer(create_buffer(device, size, usage)), memory_ptr(&memory)
+    : buffer(create_buffer(device, size, usage)),
+      memory_ptr(&memory),
+      size(size)
 {
     memory.allocate_buffer(buffer.handle, size, memory_usage);
 }
 Buffer::~Buffer() { memory_ptr->free(buffer.handle); }
+
+void Buffer::map()
+{
+    memory_ptr->map(buffer.handle, &mapped_ptr);
+    is_mapped = true;
+}
+void Buffer::unmap()
+{
+    memory_ptr->unmap(buffer.handle);
+    is_mapped = false;
+}
+void Buffer::copy_to(void const* pData, size_t size)
+{
+    if (!is_mapped) map();
+
+    if (mapped_ptr != nullptr) memcpy(mapped_ptr, pData, size);
+}
 
 VkDescriptorBufferInfo Buffer::descriptor_info() const
 {
@@ -1013,8 +1061,8 @@ void set_image_layout(VkCommandBuffer cmdbuffer, VkImage image,
     image_memory_barrier.subresourceRange = subresource_range;
 
     // Source layouts (old)
-    // Source access mask controls actions that have to be finished on the old
-    // layout before it will be transitioned to the new layout
+    // Source access mask controls actions that have to be finished on the
+    // old layout before it will be transitioned to the new layout
     switch (old_image_layout)
     {
         case VK_IMAGE_LAYOUT_UNDEFINED:
@@ -1026,8 +1074,8 @@ void set_image_layout(VkCommandBuffer cmdbuffer, VkImage image,
 
         case VK_IMAGE_LAYOUT_PREINITIALIZED:
             // Image is preinitialized
-            // Only valid as initial layout for linear images, preserves memory
-            // contents Make sure host writes have been finished
+            // Only valid as initial layout for linear images, preserves
+            // memory contents Make sure host writes have been finished
             image_memory_barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
             break;
 
@@ -1069,7 +1117,8 @@ void set_image_layout(VkCommandBuffer cmdbuffer, VkImage image,
     }
 
     // Target layouts (new)
-    // Destination access mask controls the dependency for the new image layout
+    // Destination access mask controls the dependency for the new image
+    // layout
     switch (new_image_layout)
     {
         case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
@@ -1093,7 +1142,8 @@ void set_image_layout(VkCommandBuffer cmdbuffer, VkImage image,
 
         case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
             // Image layout will be used as a depth/stencil attachment
-            // Make sure any writes to depth/stencil buffer have been finished
+            // Make sure any writes to depth/stencil buffer have been
+            // finished
             image_memory_barrier.dstAccessMask =
                 image_memory_barrier.dstAccessMask |
                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;

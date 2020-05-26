@@ -1,5 +1,7 @@
 #include "rvpt.h"
 
+#include <glm/glm.hpp>
+
 RVPT::RVPT(Window& window) : window_ref(window) {}
 
 RVPT::~RVPT() {}
@@ -57,22 +59,37 @@ bool RVPT::initialize()
 
     // Compute
 
+    uniform_buffer.emplace(vk_device, memory_allocator,
+                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 16,
+                           VK::MemoryUsage::cpu_to_gpu);
+    uniform_buffer->map();
+    glm::vec4 background_color{0.2f, 0.3f, 0.4f, 0.5f};
+    uniform_buffer->copy_to(background_color);
+
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+         nullptr},
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT,
          nullptr}};
 
     compute_descriptor_pool.emplace(vk_device, compute_layout_bindings, 1);
     compute_descriptor_set = compute_descriptor_pool->allocate();
 
-    std::vector<VkDescriptorImageInfo> compute_descriptor_info = {
-        sampled_image->descriptor_info()};
-    VK::DescriptorUse compute_descriptor_use{
-        0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, compute_descriptor_info};
+    VK::DescriptorUse image_descriptor_use{
+        0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, image_descriptor_info};
 
-    auto compute_write_descriptor =
-        compute_descriptor_use.get_write_descriptor_set(
-            compute_descriptor_set->set);
-    vkUpdateDescriptorSets(vk_device, 1, &compute_write_descriptor, 0, nullptr);
+    std::vector<VkDescriptorBufferInfo> buffer_descriptor_info = {
+        uniform_buffer->descriptor_info()};
+    VK::DescriptorUse buffer_descriptor_use{
+        1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer_descriptor_info};
+
+    VkWriteDescriptorSet write_descriptors[] = {
+        image_descriptor_use.get_write_descriptor_set(
+            compute_descriptor_set->set),
+        buffer_descriptor_use.get_write_descriptor_set(
+            compute_descriptor_set->set)};
+
+    vkUpdateDescriptorSets(vk_device, 2, write_descriptors, 0, nullptr);
 
     compute_pipeline = pipeline_builder.create_compute_pipeline(
         "compute_pass.comp.spv", {compute_descriptor_set->layout});
@@ -155,6 +172,8 @@ void RVPT::shutdown()
     if (compute_queue) compute_queue->wait_idle();
     graphics_queue->wait_idle();
     present_queue->wait_idle();
+
+    uniform_buffer.reset();
 
     compute_work_fence.reset();
     compute_command_buffer.reset();

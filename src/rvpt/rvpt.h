@@ -89,6 +89,9 @@ class RVPT
     VK::Pipeline compute_pipeline;
     std::optional<VK::CommandBuffer> compute_command_buffer;
     std::optional<VK::Fence> compute_work_fence;
+
+    std::optional<VK::Buffer> uniform_buffer;
+
     // helper functions
     bool context_init();
     bool swapchain_init();
