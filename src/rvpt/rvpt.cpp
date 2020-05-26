@@ -64,7 +64,7 @@ bool RVPT::initialize()
                            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 64,
                            VK::MemoryUsage::cpu_to_gpu);
     camera_matrix_uniform_buffer->map();
-    glm::mat4 translationMatrix = glm::mat4();
+    glm::mat4 translationMatrix = glm::translate(glm::vec3(0, 2, 0));
     camera_matrix_uniform_buffer->copy_to(translationMatrix);
 
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {

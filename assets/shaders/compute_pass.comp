@@ -38,36 +38,30 @@ bool intersect_spheres(Ray ray)
 Ray get_ray(vec2 pixel)
 {
     vec3 origin = (vec4((cam.origin), 1) * cameraMatrix.matrix).xyz;
-    vec3 lookat = (vec4(normalize((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y) - cam.origin), 0) * cameraMatrix.matrix).xyz;
-//    return Ray(origin, normalize((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y) -cam.origin));
-    return Ray(origin, normalize((vec3(vec4(pixel.x, pixel.y, 1, 1) * cameraMatrix.matrix))));
+    vec3 lookat = (vec4((cam.center + cam.horizontal * pixel.x +cam.vertical * pixel.y), 1) * cameraMatrix.matrix).xyz;
+    return Ray(origin, normalize(lookat - origin));
 }
 
 void main()
 {
     // Setup Scene //
-    spheres[0] = Sphere(vec3(0.0f, 0.0f, 0.0f), 1.0f);
+    spheres[0] = Sphere(vec3(0.0f, 0.0f, -10.0f), 1.0f);
     // End Scene Setup //
 
     // Setup Camera //
-    vec3 look_from = vec3(0.0f, 0.0f, -10.0f);
-    vec3 target = vec3(0.0f, 0.0f, 0.0f);
+    vec3 look_from = vec3(0.0f, 0.0f, 0.0f);
+    vec3 target = vec3(0.0f, 0.0f, -1.0f);
     vec3 up = vec3(0.0f, 1.0f, 0.0f);
-
     vec3 center, horizontal, vertical;
-
     float theta = 90.0f * 3.1415f / 180.0f;
     float half_width = tan(theta / 2.0f);
     float half_height = aspect * half_width;
-
     vec3 w = normalize(target - look_from);
     vec3 u = normalize(cross(up, w));
     vec3 v = cross(w, u);
-
     center = look_from + w;
-    horizontal = u * 2.0f * half_width;
-    vertical = v * 2.0f * half_height;
-
+    horizontal = u * half_width;
+    vertical = v * half_height;
     cam = Camera(look_from, center, horizontal, vertical);
     // End Camera Setup //
 
@@ -77,8 +71,8 @@ void main()
 
     vec4 final_color;
     if (intersect_spheres(ray))
-//        final_color = vec4(1, 1, 1, 0);
-        final_color = vec4(cameraMatrix.matrix);
+        final_color = vec4(1, 1, 1, 0);
+//        final_color = vec4(cameraMatrix.matrix);
     else
         final_color = vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
 
