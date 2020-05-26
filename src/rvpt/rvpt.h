@@ -7,7 +7,7 @@
 
 #include <vulkan/vulkan.h>
 
-#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <VkBootstrap.h>
@@ -19,7 +19,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 class RVPT
 {
-   public:
+public:
     explicit RVPT(Window& window);
     ~RVPT();
 
@@ -43,7 +43,7 @@ class RVPT
 
     void shutdown();
 
-   private:
+private:
     Window& window_ref;
 
     // from a callback
@@ -99,7 +99,6 @@ class RVPT
     bool swapchain_get_images();
     void create_framebuffers();
 
-    void record_command_buffer(VK::SyncResources& current_frame,
-                               uint32_t swapchain_image_index);
+    void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();
 };
