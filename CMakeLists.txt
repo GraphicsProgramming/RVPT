@@ -7,7 +7,7 @@ find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
 add_executable(rvpt src/rvpt/main.cpp src/rvpt/rvpt.cpp src/rvpt/window.cpp src/rvpt/vk_util.cpp
-    assets/shaders/fullscreen_tri.vert assets/shaders/tex_sample.frag)
+    assets/shaders/fullscreen_tri.vert assets/shaders/tex_sample.frag src/rvpt/Time.cpp src/rvpt/Time.h)
 target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader
 target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json)

@@ -4,7 +4,3 @@
 cmake-build-*
 
 # Files
-CMakeCache.txt
-project_configuration.json
-RVPT.cbp
-rvpt
