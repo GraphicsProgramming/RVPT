@@ -10,15 +10,23 @@
 
 class Window
 {
-   public:
+public:
     enum class Action
     {
-        RELEASE, PRESS, REPEAT, UNKNOWN
+        RELEASE,
+        PRESS,
+        REPEAT,
+        UNKNOWN
     };
+
     enum class Mouse
     {
-        LEFT, RIGHT, MIDDLE, OTHER
+        LEFT,
+        RIGHT,
+        MIDDLE,
+        OTHER
     };
+
     struct Settings
     {
         int width = 800;
@@ -33,18 +41,21 @@ class Window
     ~Window();
 
     void add_key_callback(std::function<void(int keycode, Action action)> callback);
-    void add_mouse_callback(std::function<void(float x, float y, Mouse button, Action action)> callback);
+    void add_mouse_callback(
+        std::function<void(float x, float y, Mouse button, Action action)> callback);
     void poll_events();
+
     Settings get_settings();
     GLFWwindow* get_window_pointer();
 
     bool should_close();
 
-   private:
-    std::vector<std::function<void(int keycode, Action action)>> key_callbacks;
-    std::vector<std::function<void(float x, float y, Mouse button, Action action)>> mouse_callbacks;
+private:
     Settings active_settings;
     GLFWwindow* window_ptr;
+
+    std::vector<std::function<void(int keycode, Action action)>> key_callbacks;
+    std::vector<std::function<void(float x, float y, Mouse button, Action action)>> mouse_callbacks;
 
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void mouse_callback(GLFWwindow* window, int button, int action, int mods);
