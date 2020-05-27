@@ -13,6 +13,7 @@
 #include <VkBootstrap.h>
 #include "window.h"
 #include "camera.h"
+#include "timer.h"
 
 #include "vk_util.h"
 
@@ -45,7 +46,7 @@ public:
     void shutdown();
 
     camera scene_camera;
-
+    timer time;
 private:
     Window& window_ref;
 

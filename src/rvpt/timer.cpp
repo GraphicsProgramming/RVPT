@@ -3,24 +3,24 @@
 //
 
 #include <algorithm>
-#include "time.h"
+#include "timer.h"
 
-time::time()
+timer::timer()
 {
     start_time = std::chrono::high_resolution_clock::now();
 }
 
-void time::stop()
+void timer::stop()
 {
     end_time = std::chrono::high_resolution_clock::now();
 }
 
-void time::frame_start()
+void timer::frame_start()
 {
     frame_start_time = std::chrono::high_resolution_clock::now();
 }
 
-void time::frame_stop()
+void timer::frame_stop()
 {
     frame_end_time = std::chrono::high_resolution_clock::now();
 
@@ -34,20 +34,20 @@ void time::frame_stop()
     past_frame_times.back() = frame_time;
 }
 
-double time::time_since_start()
+double timer::time_since_start()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now() - start_time).count();
 }
 
-double time::average_frame_time()
+double timer::average_frame_time()
 {
     double total = 0;
-    for(auto& time : past_frame_times) total += time;
+    for(auto& timer : past_frame_times) total += timer;
     return total / past_frame_times.size();
 }
 
-double time::since_last_frame()
+double timer::since_last_frame()
 {
     // This logic may be incorrect, not 100% sure. (It could also be and I'm just being insecure)
     return std::chrono::duration_cast<std::chrono::milliseconds>(
