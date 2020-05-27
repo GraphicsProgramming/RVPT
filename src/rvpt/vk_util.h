@@ -16,15 +16,15 @@ namespace VK
 {
 const char* error_str(const VkResult result);
 
-#define VK_CHECK_RESULT(f)                                                \
-    {                                                                     \
-        VkResult res = (f);                                               \
-        if (res != VK_SUCCESS)                                            \
-        {                                                                 \
-            std::cerr << "Fatal : VkResult is" << error_str(res) << "in " \
-                      << __FILE__ << "at line" << __LINE__ << '\n';       \
-            assert(res == VK_SUCCESS);                                    \
-        }                                                                 \
+#define VK_CHECK_RESULT(f)                                                                         \
+    {                                                                                              \
+        VkResult res = (f);                                                                        \
+        if (res != VK_SUCCESS)                                                                     \
+        {                                                                                          \
+            std::cerr << "Fatal : VkResult is" << error_str(res) << "in " << __FILE__ << "at line" \
+                      << __LINE__ << '\n';                                                         \
+            assert(res == VK_SUCCESS);                                                             \
+        }                                                                                          \
     }
 
 constexpr uint32_t FLAGS_NONE = 0;
@@ -32,7 +32,7 @@ constexpr uint32_t FLAGS_NONE = 0;
 template <typename T, typename Deleter>
 class HandleWrapper
 {
-   public:
+public:
     explicit HandleWrapper(VkDevice device, T handle, Deleter deleter)
         : device(device), handle(handle), deleter(deleter)
     {
@@ -68,7 +68,7 @@ class HandleWrapper
 
 class Fence
 {
-   public:
+public:
     explicit Fence(VkDevice device, VkFenceCreateFlags flags = 0);
 
     bool check() const;
@@ -76,17 +76,17 @@ class Fence
     void reset() const;
     VkFence get() const;
 
-   private:
+private:
     HandleWrapper<VkFence, PFN_vkDestroyFence> fence;
 };
 
 class Semaphore
 {
-   public:
+public:
     explicit Semaphore(VkDevice device);
     VkSemaphore get() const;
 
-   private:
+private:
     HandleWrapper<VkSemaphore, PFN_vkDestroySemaphore> semaphore;
 };
 
@@ -94,13 +94,12 @@ class CommandBuffer;
 
 class Queue
 {
-   public:
+public:
     explicit Queue(VkDevice device, uint32_t family, uint32_t queue_index = 0);
 
     void submit(CommandBuffer const& command_buffer, Fence& fence);
     void submit(CommandBuffer const& command_buffer, Fence const& fence,
-                Semaphore const& wait_semaphore,
-                Semaphore const& signal_semaphore,
+                Semaphore const& wait_semaphore, Semaphore const& signal_semaphore,
                 VkPipelineStageFlags const stage_mask);
 
     void wait_idle();
@@ -109,7 +108,7 @@ class Queue
     VkQueue get() const;
     int get_family() const;
 
-   private:
+private:
     void submit(VkSubmitInfo const& submitInfo, Fence const& fence);
 
     std::mutex submit_mutex;
@@ -119,20 +118,19 @@ class Queue
 
 class CommandPool
 {
-   public:
-    explicit CommandPool(VkDevice device, Queue const& queue,
-                         VkCommandPoolCreateFlags flags = 0);
+public:
+    explicit CommandPool(VkDevice device, Queue const& queue, VkCommandPoolCreateFlags flags = 0);
 
     VkCommandBuffer allocate();
     void free(VkCommandBuffer command_buffer);
 
-   private:
+private:
     HandleWrapper<VkCommandPool, PFN_vkDestroyCommandPool> pool;
 };
 
 class CommandBuffer
 {
-   public:
+public:
     explicit CommandBuffer(VkDevice device, Queue const& queue);
     ~CommandBuffer();
 
@@ -147,7 +145,7 @@ class CommandBuffer
     void end();
     void reset();
 
-   private:
+private:
     VkDevice device;
     Queue const* queue;
     CommandPool pool;
@@ -156,9 +154,9 @@ class CommandBuffer
 
 class SyncResources
 {
-   public:
-    explicit SyncResources(VkDevice device, Queue& graphics_queue,
-                           Queue& present_queue, VkSwapchainKHR swapchain);
+public:
+    explicit SyncResources(VkDevice device, Queue& graphics_queue, Queue& present_queue,
+                           VkSwapchainKHR swapchain);
 
     void submit();
     VkResult present(uint32_t image_index);
@@ -175,14 +173,13 @@ class SyncResources
 };
 
 using DescriptorUseVector =
-    std::variant<std::vector<VkDescriptorBufferInfo>,
-                 std::vector<VkDescriptorImageInfo>, std::vector<VkBufferView>>;
+    std::variant<std::vector<VkDescriptorBufferInfo>, std::vector<VkDescriptorImageInfo>,
+                 std::vector<VkBufferView>>;
 
 class DescriptorUse
 {
-   public:
-    explicit DescriptorUse(uint32_t bind_point, uint32_t count,
-                           VkDescriptorType type,
+public:
+    explicit DescriptorUse(uint32_t bind_point, uint32_t count, VkDescriptorType type,
                            DescriptorUseVector descriptor_use_data);
 
     VkWriteDescriptorSet get_write_descriptor_set(VkDescriptorSet set);
@@ -195,13 +192,12 @@ class DescriptorUse
 
 class DescriptorSet
 {
-   public:
-    explicit DescriptorSet(VkDevice device, VkDescriptorSet set,
-                           VkDescriptorSetLayout layout);
+public:
+    explicit DescriptorSet(VkDevice device, VkDescriptorSet set, VkDescriptorSetLayout layout);
 
     void update(std::vector<DescriptorUse> descriptors) const;
-    void bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point,
-              VkPipelineLayout layout, uint32_t location) const;
+    void bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point, VkPipelineLayout layout,
+              uint32_t location) const;
 
     VkDevice device;
     VkDescriptorSet set;
@@ -210,25 +206,22 @@ class DescriptorSet
 
 class DescriptorPool
 {
-   public:
-    explicit DescriptorPool(
-        VkDevice device,
-        std::vector<VkDescriptorSetLayoutBinding> const& bindings,
-        uint32_t count);
+public:
+    explicit DescriptorPool(VkDevice device,
+                            std::vector<VkDescriptorSetLayoutBinding> const& bindings,
+                            uint32_t count);
 
     DescriptorSet allocate();
     void free(DescriptorSet set);
 
-   private:
-    HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout>
-        layout;
+private:
+    HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout> layout;
     HandleWrapper<VkDescriptorPool, PFN_vkDestroyDescriptorPool> pool;
     uint32_t max_sets = 0;
     uint32_t current_sets = 0;
 };
 
-VkRenderPass create_render_pass(VkDevice device,
-                                VkFormat swapchain_image_format);
+VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format);
 void destroy_render_pass(VkDevice device, VkRenderPass render_pass);
 struct Framebuffer
 {
@@ -256,25 +249,22 @@ struct PipelineBuilder
     PipelineBuilder() {}  // Must give it the device before using it.
     explicit PipelineBuilder(VkDevice device);
 
-    Pipeline create_graphics_pipeline(
-        std::string vert_shader, std::string frag_shader,
-        std::vector<VkDescriptorSetLayout> descriptor_layouts,
-        VkRenderPass render_pass, VkExtent2D extent);
-    Pipeline create_compute_pipeline(
-        std::string compute_shader,
-        std::vector<VkDescriptorSetLayout> descriptor_layouts);
+    Pipeline create_graphics_pipeline(std::string vert_shader, std::string frag_shader,
+                                      std::vector<VkDescriptorSetLayout> descriptor_layouts,
+                                      VkRenderPass render_pass, VkExtent2D extent);
+    Pipeline create_compute_pipeline(std::string compute_shader,
+                                     std::vector<VkDescriptorSetLayout> descriptor_layouts);
 
     void shutdown();
 
-   private:
+private:
     VkDevice device = nullptr;
     VkPipelineCache cache = nullptr;
 
     std::vector<Pipeline> pipelines;
 
-    void create_pipeline_layout(
-        Pipeline& pipeline,
-        std::vector<VkDescriptorSetLayout> const& descriptor_layouts);
+    void create_pipeline_layout(Pipeline& pipeline,
+                                std::vector<VkDescriptorSetLayout> const& descriptor_layouts);
 };
 
 enum class MemoryUsage
@@ -287,7 +277,7 @@ enum class MemoryUsage
 };
 class MemoryAllocator
 {
-   public:
+public:
     MemoryAllocator() {}
     explicit MemoryAllocator(VkPhysicalDevice physical_device, VkDevice device);
 
@@ -302,12 +292,11 @@ class MemoryAllocator
     void map(VkBuffer buffer, void** data_ptr);
     void unmap(VkBuffer buffer);
 
-   private:
+private:
     // Unused currently
     struct Pool
     {
-        Pool(VkDevice device, VkDeviceMemory device_memory,
-             VkDeviceSize max_size);
+        Pool(VkDevice device, VkDeviceMemory device_memory, VkDeviceSize max_size);
         HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> device_memory;
         VkDeviceSize max_size;
         struct Allocation
@@ -334,23 +323,20 @@ class MemoryAllocator
 
     VkMemoryPropertyFlags get_memory_property_flags(MemoryUsage usage);
 
-    uint32_t find_memory_type(uint32_t typeFilter,
-                              VkMemoryPropertyFlags properties);
+    uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-    HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> create_device_memory(
-        VkDeviceSize max_size, uint32_t memory_type);
+    HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> create_device_memory(VkDeviceSize max_size,
+                                                                         uint32_t memory_type);
     //        VkMemoryRequirements memRequirements, VkMemoryPropertyFlags
     //        properties);
 };
 
 class Image
 {
-   public:
-    explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue,
-                   VkFormat format, VkImageTiling tiling, uint32_t width,
-                   uint32_t height, VkImageUsageFlags usage,
-                   VkImageLayout layout, VkDeviceSize size,
-                   MemoryUsage memory_usage);
+public:
+    explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat format,
+                   VkImageTiling tiling, uint32_t width, uint32_t height, VkImageUsageFlags usage,
+                   VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage);
     ~Image();
 
     VkDescriptorImageInfo descriptor_info() const;
@@ -369,10 +355,9 @@ class Image
 
 class Buffer
 {
-   public:
-    explicit Buffer(VkDevice device, MemoryAllocator& memory,
-                    VkBufferUsageFlags usage, VkDeviceSize size,
-                    MemoryUsage memory_usage);
+public:
+    explicit Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
+                    VkDeviceSize size, MemoryUsage memory_usage);
     ~Buffer();
 
     void map();
@@ -392,7 +377,7 @@ class Buffer
 
     VkDescriptorBufferInfo descriptor_info() const;
 
-   private:
+private:
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
     VkDeviceSize size;
@@ -402,11 +387,9 @@ class Buffer
     void copy_to(void const* pData, size_t size);
 };
 
-void set_image_layout(
-    VkCommandBuffer command_buffer, VkImage image,
-    VkImageLayout old_image_layout, VkImageLayout new_image_layout,
-    VkImageSubresourceRange subresource_range,
-    VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-    VkPipelineStageFlags dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+void set_image_layout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_image_layout,
+                      VkImageLayout new_image_layout, VkImageSubresourceRange subresource_range,
+                      VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                      VkPipelineStageFlags dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
 }  // namespace VK
