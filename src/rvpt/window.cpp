@@ -28,7 +28,7 @@ Window::~Window()
 
 float Window::get_aspect_ratio()
 {
-    return static_cast<float>(active_settings.width) / active_settings.height;
+    return static_cast<float>(active_settings.width) / static_cast<float>(active_settings.height);
 }
 
 Window::Settings Window::get_settings() { return active_settings; }
