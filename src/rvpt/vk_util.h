@@ -54,10 +54,18 @@ public:
     }
     HandleWrapper& operator=(HandleWrapper&& other) noexcept
     {
-        device = other.device;
-        handle = other.handle;
-        deleter = other.deleter;
-        other.handle = nullptr;
+        if (this != &other)
+        {
+            if (handle != nullptr)
+            {
+                deleter(device, handle, nullptr);
+            }
+
+            device = other.device;
+            handle = other.handle;
+            deleter = other.deleter;
+            other.handle = nullptr;
+        }
         return *this;
     }
 
@@ -134,8 +142,8 @@ public:
     explicit CommandBuffer(VkDevice device, Queue const& queue);
     ~CommandBuffer();
 
-    CommandBuffer(CommandBuffer const& fence) = delete;
-    CommandBuffer& operator=(CommandBuffer const& fence) = delete;
+    CommandBuffer(CommandBuffer const& other) = delete;
+    CommandBuffer& operator=(CommandBuffer const& other) = delete;
     CommandBuffer(CommandBuffer&& other) noexcept;
     CommandBuffer& operator=(CommandBuffer&& other) noexcept;
 
@@ -214,8 +222,10 @@ public:
     DescriptorSet allocate();
     void free(DescriptorSet set);
 
+    VkDescriptorSetLayout layout();
+
 private:
-    HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout> layout;
+    HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout> vk_layout;
     HandleWrapper<VkDescriptorPool, PFN_vkDestroyDescriptorPool> pool;
     uint32_t max_sets = 0;
     uint32_t current_sets = 0;
@@ -275,6 +285,7 @@ enum class MemoryUsage
     gpu_to_cpu,
     cpu_copy
 };
+
 class MemoryAllocator
 {
 public:
@@ -283,8 +294,40 @@ public:
 
     void shutdown();
 
-    bool allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage);
-    bool allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage);
+    template <typename T>
+    struct Allocation
+    {
+        Allocation(MemoryAllocator* memory_ptr, T data) : memory_ptr(memory_ptr), data(data) {}
+        ~Allocation()
+        {
+            if (data != VK_NULL_HANDLE) memory_ptr->free(data);
+        }
+
+        Allocation(Allocation const& other) noexcept = delete;
+        Allocation& operator=(Allocation const& other) noexcept = delete;
+
+        Allocation(Allocation&& other) noexcept : memory_ptr(other.memory_ptr), data(other.data)
+        {
+            other.data = VK_NULL_HANDLE;
+        }
+        Allocation& operator=(Allocation&& other) noexcept
+        {
+            if (this != &other)
+            {
+                if (data != VK_NULL_HANDLE) memory_ptr->free(data);
+                memory_ptr = other.memory_ptr;
+                data = other.data;
+                other.data = VK_NULL_HANDLE;
+            }
+            return *this;
+        }
+
+        MemoryAllocator* memory_ptr;
+        T data;
+    };
+
+    Allocation<VkImage> allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage);
+    Allocation<VkBuffer> allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage);
 
     void free(VkImage image);
     void free(VkBuffer buffer);
@@ -312,14 +355,14 @@ private:
     VkDevice device;
     VkPhysicalDeviceMemoryProperties memory_properties;
 
-    struct Allocation
+    struct InternalAllocation
     {
         VkDeviceSize size;
         HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> memory;
     };
 
-    std::vector<std::pair<VkImage, Allocation>> image_allocations;
-    std::vector<std::pair<VkBuffer, Allocation>> buffer_allocations;
+    std::vector<std::pair<VkImage, InternalAllocation>> image_allocations;
+    std::vector<std::pair<VkBuffer, InternalAllocation>> buffer_allocations;
 
     VkMemoryPropertyFlags get_memory_property_flags(MemoryUsage usage);
 
@@ -327,8 +370,6 @@ private:
 
     HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> create_device_memory(VkDeviceSize max_size,
                                                                          uint32_t memory_type);
-    //        VkMemoryRequirements memRequirements, VkMemoryPropertyFlags
-    //        properties);
 };
 
 class Image
@@ -337,13 +378,12 @@ public:
     explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat format,
                    VkImageTiling tiling, uint32_t width, uint32_t height, VkImageUsageFlags usage,
                    VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage);
-    ~Image();
 
     VkDescriptorImageInfo descriptor_info() const;
 
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkImage, PFN_vkDestroyImage> image;
-    bool successfully_got_memory;
+    MemoryAllocator::Allocation<VkImage> image_allocation;
     HandleWrapper<VkImageView, PFN_vkDestroyImageView> image_view;
     HandleWrapper<VkSampler, PFN_vkDestroySampler> sampler;
 
@@ -358,7 +398,6 @@ class Buffer
 public:
     explicit Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
                     VkDeviceSize size, MemoryUsage memory_usage);
-    ~Buffer();
 
     void map();
     void unmap();
@@ -380,6 +419,8 @@ public:
 private:
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
+    MemoryAllocator::Allocation<VkBuffer> buffer_allocation;
+
     VkDeviceSize size;
     bool is_mapped = false;
     void* mapped_ptr = nullptr;
