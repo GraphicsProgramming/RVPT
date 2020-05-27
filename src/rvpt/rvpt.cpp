@@ -96,7 +96,7 @@ RVPT::draw_return RVPT::draw()
     compute_work_fence->wait();
     compute_work_fence->reset();
 
-//    camera_matrix_uniform_buffer->copy_to();
+    camera_matrix_uniform_buffer->copy_to(scene_camera.get_data());
 
     record_compute_command_buffer();
 
