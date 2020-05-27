@@ -226,11 +226,15 @@ CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
 }
 CommandBuffer& CommandBuffer::operator=(CommandBuffer&& other) noexcept
 {
-    device = other.device;
-    queue = other.queue;
-    pool = std::move(other.pool);
-    command_buffer = other.command_buffer;
-    other.command_buffer = VK_NULL_HANDLE;
+    if (this != &other)
+    {
+        if (command_buffer != nullptr) pool.free(command_buffer);
+        device = other.device;
+        queue = other.queue;
+        pool = std::move(other.pool);
+        command_buffer = other.command_buffer;
+        other.command_buffer = VK_NULL_HANDLE;
+    }
     return *this;
 }
 
@@ -372,7 +376,7 @@ auto create_descriptor_pool(VkDevice device,
 DescriptorPool::DescriptorPool(VkDevice device,
                                std::vector<VkDescriptorSetLayoutBinding> const& bindings,
                                uint32_t count)
-    : layout(create_descriptor_set_layout(device, bindings)),
+    : vk_layout(create_descriptor_set_layout(device, bindings)),
       pool(create_descriptor_pool(device, bindings, count)),
       max_sets(count)
 {
@@ -386,17 +390,19 @@ DescriptorSet DescriptorPool::allocate()
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool = pool.handle;
     alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &layout.handle;
+    alloc_info.pSetLayouts = &vk_layout.handle;
 
     VkResult res = vkAllocateDescriptorSets(pool.device, &alloc_info, &set);
     assert(res == VK_SUCCESS);
 
-    return DescriptorSet{pool.device, set, layout.handle};
+    return DescriptorSet{pool.device, set, vk_layout.handle};
 }
 void DescriptorPool::free(DescriptorSet set)
 {
     if (current_sets > 0) vkFreeDescriptorSets(pool.device, pool.handle, 1, &set.set);
 }
+
+VkDescriptorSetLayout DescriptorPool::layout() { return vk_layout.handle; }
 
 // Render Pass
 
@@ -704,7 +710,9 @@ void MemoryAllocator::shutdown()
     buffer_allocations.clear();
 }
 
-bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage)
+MemoryAllocator::Allocation<VkImage> MemoryAllocator::allocate_image(VkImage image,
+                                                                     VkDeviceSize size,
+                                                                     MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetImageMemoryRequirements(device, image, &memory_requirements);
@@ -716,12 +724,14 @@ bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size, MemoryUsa
 
     vkBindImageMemory(device, image, device_memory.handle, 0);
 
-    Allocation alloc{size, std::move(device_memory)};
+    InternalAllocation alloc{size, std::move(device_memory)};
     image_allocations.emplace_back(image, std::move(alloc));
-    return true;
+    return Allocation(this, image);
 }
 
-bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage)
+MemoryAllocator::Allocation<VkBuffer> MemoryAllocator::allocate_buffer(VkBuffer buffer,
+                                                                       VkDeviceSize size,
+                                                                       MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, buffer, &memory_requirements);
@@ -733,16 +743,16 @@ bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size, Memory
 
     vkBindBufferMemory(device, buffer, device_memory.handle, 0);
 
-    Allocation alloc{memory_requirements.size, std::move(device_memory)};
+    InternalAllocation alloc{memory_requirements.size, std::move(device_memory)};
     buffer_allocations.emplace_back(buffer, std::move(alloc));
-    return true;
+
+    return Allocation(this, buffer);
 }
 
 void MemoryAllocator::free(VkImage image)
 {
     auto it = std::find_if(std::begin(image_allocations), std::end(image_allocations),
                            [&](auto const& elem) { return elem.first == image; });
-
     if (it != std::end(image_allocations))
     {
         image_allocations.erase(it);
@@ -805,7 +815,6 @@ HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> MemoryAllocator::create_device_m
     allocation_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocation_info.allocationSize = max_size;
     allocation_info.memoryTypeIndex = memory_type_index;
-    // find_memory_type(memRequirements.memoryTypeBits, properties);
 
     VkDeviceMemory memory;
     VK_CHECK_RESULT(vkAllocateMemory(device, &allocation_info, nullptr, &memory));
@@ -898,7 +907,7 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat fo
              VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       image(create_image(device, format, tiling, {width, height, 1}, usage)),
-      successfully_got_memory(memory.allocate_image(image.handle, size, memory_usage)),
+      image_allocation(memory.allocate_image(image.handle, size, memory_usage)),
       image_view(create_image_view(device, image.handle, format)),
       sampler(create_sampler(device)),
       format(format),
@@ -917,7 +926,6 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat fo
     queue.submit(cmd_buf, fence);
     fence.wait();
 }
-Image::~Image() { memory_ptr->free(image.handle); }
 
 VkDescriptorImageInfo Image::descriptor_info() const
 {
@@ -942,12 +950,12 @@ auto create_buffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
 
 Buffer::Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
                VkDeviceSize size, MemoryUsage memory_usage)
-    : buffer(create_buffer(device, size, usage)), memory_ptr(&memory), size(size)
+    : memory_ptr(&memory),
+      buffer(create_buffer(device, size, usage)),
+      buffer_allocation(memory.allocate_buffer(buffer.handle, size, memory_usage)),
+      size(size)
 {
-    memory.allocate_buffer(buffer.handle, size, memory_usage);
 }
-Buffer::~Buffer() { memory_ptr->free(buffer.handle); }
-
 void Buffer::map()
 {
     memory_ptr->map(buffer.handle, &mapped_ptr);
