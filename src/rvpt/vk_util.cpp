@@ -736,6 +736,41 @@ std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) c
     return aligned_code;
 }
 
+std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) const
+{
+    std::string shader_path;
+    if (source_folder != "")
+        shader_path = source_folder + "/assets/shaders/" + filename;
+    else
+        shader_path = "assets/shaders/" + filename;
+#ifdef WIN32
+    std::string win_path;
+    for (auto& c : shader_path)
+    {
+        if (c == '/')
+            win_path.push_back('\\');
+        else
+            win_path.push_back(c);
+    }
+    shader_path = win_path;
+#endif
+    std::ifstream file(shader_path, std::ios::ate | std::ios::binary);
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open file: " + filename << '\n';
+        return {};
+    }
+    size_t file_size = (size_t)file.tellg();
+    std::vector<char> buffer(file_size);
+    file.seekg(0);
+    file.read(buffer.data(), file_size);
+
+    std::vector<uint32_t> aligned_code(buffer.size() / 4);
+    memcpy(aligned_code.data(), buffer.data(), buffer.size());
+
+    return aligned_code;
+}
+
 void PipelineBuilder::create_pipeline_layout(
     Pipeline& pipeline, std::vector<VkDescriptorSetLayout> const& descriptor_layouts)
 {
