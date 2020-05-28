@@ -1,15 +1,30 @@
 #include "rvpt.h"
 
-#include <glm/glm.hpp>
+#include <cstdlib>
 
-RVPT::RVPT(Window& window) : window_ref(window) {}
+#include <algorithm>
+#include <fstream>
+
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
+
+RVPT::RVPT(Window& window) : window_ref(window)
+{
+    std::ifstream input("project_configuration.json");
+    nlohmann::json json;
+    input >> json;
+    if (json.contains("project_source_dir"))
+    {
+        source_folder = json["project_source_dir"];
+    }
+}
 
 RVPT::~RVPT() {}
 
 bool RVPT::initialize()
 {
     bool init = context_init();
-    pipeline_builder = VK::PipelineBuilder(vk_device);
+    pipeline_builder = VK::PipelineBuilder(vk_device, source_folder);
     memory_allocator =
         VK::MemoryAllocator(context.device.physical_device.physical_device, vk_device);
 
@@ -168,7 +183,43 @@ void RVPT::shutdown()
     vkb::destroy_instance(context.inst);
 }
 
-void RVPT::reload_shaders() {}
+void replace_all(std::string& str, const std::string& from, const std::string& to)
+{
+    if (from.empty()) return;
+    size_t start_pos = 0;
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+    {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();  // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
+}
+
+void RVPT::reload_shaders()
+{
+    if (source_folder == "")
+    {
+        std::cout << "source_folder not set, unable to reload shaders\n";
+        return;
+    }
+
+#ifdef WIN32
+    auto double_backslash = source_folder;
+    replace_all(double_backslash, "/", "\\\\");
+    auto str = std::string("cd ") + double_backslash + "\\\\assets\\\\shaders && " +
+               double_backslash + "\\\\scripts\\\\compile_shaders.bat";
+    std::cout << str << "\n";
+    std::system(str.c_str());
+#elif UNIX
+    auto str = std::string("cd ") + source_folder + "/assets/shaders && bash " + source_folder +
+               "/scripts/compile_shaders.sh";
+    std::system(str.c_str());
+#endif
+    if (compute_queue) compute_queue->wait_idle();
+    graphics_queue->wait_idle();
+    present_queue->wait_idle();
+
+    pipeline_builder.recompile_pipelines();
+}
 
 // Private functions //
 bool RVPT::context_init()
@@ -377,11 +428,14 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
     VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      rendering_resources->fullscreen_triangle_pipeline.pipeline);
+    pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline);
+
+    vkCmdBindPipeline(
+        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline));
     vkCmdBindDescriptorSets(
         cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        rendering_resources->fullscreen_triangle_pipeline.layout, 0, 1,
+        pipeline_builder.get_layout(rendering_resources->fullscreen_triangle_pipeline), 0, 1,
         &per_frame_descriptor_sets[current_frame_index].image_descriptor_set.set, 0, nullptr);
     vkCmdDraw(cmd_buf, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd_buf);
@@ -394,10 +448,11 @@ void RVPT::record_compute_command_buffer()
     command_buffer.begin();
     VkCommandBuffer cmd_buf = command_buffer.get();
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      rendering_resources->raytrace_pipeline.pipeline);
+                      pipeline_builder.get_pipeline(rendering_resources->raytrace_pipeline));
     vkCmdBindDescriptorSets(
-        cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, rendering_resources->raytrace_pipeline.layout, 0,
-        1, &per_frame_descriptor_sets[current_frame_index].raytracing_descriptor_sets.set, 0, 0);
+        cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+        pipeline_builder.get_layout(rendering_resources->raytrace_pipeline), 0, 1,
+        &per_frame_descriptor_sets[current_frame_index].raytracing_descriptor_sets.set, 0, 0);
 
     vkCmdDispatch(cmd_buf, per_frame_output_image[current_frame_index].width / 16,
                   per_frame_output_image[current_frame_index].height / 16, 1);

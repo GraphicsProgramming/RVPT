@@ -47,6 +47,7 @@ public:
 
 private:
     Window& window_ref;
+    std::string source_folder = "";
 
     // from a callback
     bool framebuffer_resized = false;
@@ -87,8 +88,8 @@ private:
 
         VK::DescriptorPool raytrace_descriptor_pool;
 
-        VK::Pipeline fullscreen_triangle_pipeline;
-        VK::Pipeline raytrace_pipeline;
+        VK::PipelineHandle fullscreen_triangle_pipeline;
+        VK::PipelineHandle raytrace_pipeline;
     };
 
     struct PerFrameDescriptorSets

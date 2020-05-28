@@ -248,33 +248,53 @@ struct ShaderModule
 
 std::vector<uint32_t> load_spirv(std::string const& filename);
 
-struct Pipeline
+struct PipelineHandle
 {
-    VkPipelineLayout layout;
-    VkPipeline pipeline;
+    uint32_t index;
 };
 
 struct PipelineBuilder
 {
     PipelineBuilder() {}  // Must give it the device before using it.
-    explicit PipelineBuilder(VkDevice device);
-
-    Pipeline create_graphics_pipeline(std::string vert_shader, std::string frag_shader,
-                                      std::vector<VkDescriptorSetLayout> descriptor_layouts,
-                                      VkRenderPass render_pass, VkExtent2D extent);
-    Pipeline create_compute_pipeline(std::string compute_shader,
-                                     std::vector<VkDescriptorSetLayout> descriptor_layouts);
-
+    explicit PipelineBuilder(VkDevice device, std::string const& source_folder);
     void shutdown();
+
+    VkPipelineLayout get_layout(PipelineHandle const& handle);
+    VkPipeline get_pipeline(PipelineHandle const& handle);
+
+    PipelineHandle create_graphics_pipeline(std::string vert_shader, std::string frag_shader,
+                                            std::vector<VkDescriptorSetLayout> descriptor_layouts,
+                                            VkRenderPass render_pass, VkExtent2D extent);
+    PipelineHandle create_compute_pipeline(std::string compute_shader,
+                                           std::vector<VkDescriptorSetLayout> descriptor_layouts);
+
+    void recompile_pipelines();
 
 private:
     VkDevice device = nullptr;
     VkPipelineCache cache = nullptr;
+    std::string source_folder = "";
+
+    struct Pipeline
+    {
+        uint32_t index;
+        VkPipelineLayout layout = VK_NULL_HANDLE;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        std::string vert_shader, frag_shader, compute_shader;
+        std::vector<VkDescriptorSetLayout> descriptor_layouts;
+        VkRenderPass render_pass;
+        VkExtent2D extent;
+    };
+    uint32_t pipeline_index = 0;
 
     std::vector<Pipeline> pipelines;
 
+    uint32_t get_next_index() { return pipeline_index++; }
+
     void create_pipeline_layout(Pipeline& pipeline,
                                 std::vector<VkDescriptorSetLayout> const& descriptor_layouts);
+
+    std::vector<uint32_t> load_spirv(std::string const& filename) const;
 };
 
 enum class MemoryUsage
