@@ -22,6 +22,17 @@ int main()
         return 0;
     }
 
+    window.add_key_callback([&](int keycode, Window::Action action) {
+        if (keycode == GLFW_KEY_ESCAPE && action == Window::Action::RELEASE)
+        {
+            window.set_close();
+        }
+        if (keycode == GLFW_KEY_R && action == Window::Action::RELEASE)
+        {
+            rvpt.reload_shaders();
+        }
+    });
+
     while (!window.should_close())
     {
         window.poll_events();

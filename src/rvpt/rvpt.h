@@ -43,6 +43,8 @@ public:
 
     void shutdown();
 
+    void reload_shaders();
+
 private:
     Window& window_ref;
 

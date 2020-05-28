@@ -51,6 +51,7 @@ public:
     GLFWwindow* get_window_pointer();
 
     bool should_close();
+    void set_close();
 
 private:
     std::vector<std::function<void(int keycode, Action action)>> key_callbacks;

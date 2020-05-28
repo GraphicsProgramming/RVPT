@@ -14,7 +14,8 @@ Window::Window(Window::Settings settings) : active_settings(settings)
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    window_ptr = glfwCreateWindow(settings.width, settings.height, settings.title, nullptr, nullptr);
+    window_ptr =
+        glfwCreateWindow(settings.width, settings.height, settings.title, nullptr, nullptr);
     if (window_ptr == nullptr)
         std::cerr << "Failed to create a glfw window" << '\n';
     else
@@ -77,7 +78,7 @@ void Window::key_callback(GLFWwindow* window, int key, int scancode, int action,
     for (auto& callback : window_ptr->key_callbacks) callback(key, callback_action);
 }
 
-void Window::mouse_click_callback(GLFWwindow *window, int button, int action, int mods)
+void Window::mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
 {
     Action callback_action;
     switch (action)
@@ -112,22 +113,20 @@ void Window::mouse_click_callback(GLFWwindow *window, int button, int action, in
     }
 
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for(auto& callback : window_ptr->mouse_click_callbacks)
+    for (auto& callback : window_ptr->mouse_click_callbacks)
         callback(mouse_button, callback_action);
 }
 
-void Window::mouse_move_callback(GLFWwindow *window, double x, double y)
+void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for(auto& callback : window_ptr->mouse_move_callbacks)
-        callback(x, y);
+    for (auto& callback : window_ptr->mouse_move_callbacks) callback(x, y);
 }
 
-void Window::scroll_callback(GLFWwindow *window, double x, double y)
+void Window::scroll_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for(auto& callback : window_ptr->scroll_callbacks)
-        callback(x, y);
+    for (auto& callback : window_ptr->scroll_callbacks) callback(x, y);
 }
 
 Window::Settings Window::get_settings() { return active_settings; }
@@ -135,3 +134,5 @@ Window::Settings Window::get_settings() { return active_settings; }
 GLFWwindow* Window::get_window_pointer() { return window_ptr; }
 
 bool Window::should_close() { return glfwWindowShouldClose(window_ptr); }
+
+void Window::set_close() { glfwSetWindowShouldClose(window_ptr, GLFW_TRUE); }
