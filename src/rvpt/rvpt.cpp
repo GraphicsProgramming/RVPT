@@ -168,6 +168,8 @@ void RVPT::shutdown()
     vkb::destroy_instance(context.inst);
 }
 
+void RVPT::reload_shaders() {}
+
 // Private functions //
 bool RVPT::context_init()
 {
