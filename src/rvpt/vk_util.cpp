@@ -1,12 +1,15 @@
 #include "vk_util.h"
 
+#include <cstring>
+
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <cstring>
+
 namespace VK
 {
 const char* error_str(const VkResult result)
@@ -499,33 +502,41 @@ ShaderModule::ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_c
 {
 }
 
-std::vector<uint32_t> load_spirv(std::string const& filename)
+PipelineBuilder::PipelineBuilder(VkDevice device, std::string const& source_folder)
+    : device(device), source_folder(source_folder)
 {
-    std::ifstream file("assets/shaders/" + filename, std::ios::ate | std::ios::binary);
-    if (!file.is_open())
-    {
-        std::cerr << "Failed to open file: " + filename << '\n';
-        return {};
-    }
-    size_t file_size = (size_t)file.tellg();
-    std::vector<char> buffer(file_size);
-    file.seekg(0);
-    file.read(buffer.data(), file_size);
-
-    std::vector<uint32_t> aligned_code(buffer.size() / 4);
-    memcpy(aligned_code.data(), buffer.data(), buffer.size());
-
-    return aligned_code;
 }
 
-PipelineBuilder::PipelineBuilder(VkDevice device) : device(device) {}
+void PipelineBuilder::shutdown()
+{
+    for (auto& pipeline : pipelines)
+    {
+        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+        vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+    }
+}
 
-Pipeline PipelineBuilder::create_graphics_pipeline(
+VkPipelineLayout PipelineBuilder::get_layout(PipelineHandle const& handle)
+{
+    return pipelines.at(handle.index).layout;
+}
+VkPipeline PipelineBuilder::get_pipeline(PipelineHandle const& handle)
+{
+    return pipelines.at(handle.index).pipeline;
+}
+
+PipelineHandle PipelineBuilder::create_graphics_pipeline(
     std::string vert_shader, std::string frag_shader,
     std::vector<VkDescriptorSetLayout> descriptor_layouts, VkRenderPass render_pass,
     VkExtent2D extent)
 {
     Pipeline pipeline;
+    pipeline.index = get_next_index();
+    pipeline.vert_shader = vert_shader;
+    pipeline.frag_shader = frag_shader;
+    pipeline.descriptor_layouts = descriptor_layouts;
+    pipeline.render_pass = render_pass;
+    pipeline.extent = extent;
 
     auto vertex_code = load_spirv(vert_shader);
     assert(vertex_code.size());
@@ -641,13 +652,16 @@ Pipeline PipelineBuilder::create_graphics_pipeline(
         vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
 
     pipelines.push_back(pipeline);
-    return pipeline;
+    return {pipeline.index};
 }
 
-Pipeline PipelineBuilder::create_compute_pipeline(
+PipelineHandle PipelineBuilder::create_compute_pipeline(
     std::string compute_shader, std::vector<VkDescriptorSetLayout> descriptor_layouts)
 {
     Pipeline pipeline;
+    pipeline.index = get_next_index();
+    pipeline.compute_shader = compute_shader;
+    pipeline.descriptor_layouts = descriptor_layouts;
 
     auto compute_code = load_spirv(compute_shader);
     assert(compute_code.size());
@@ -672,16 +686,54 @@ Pipeline PipelineBuilder::create_compute_pipeline(
     VK_CHECK_RESULT(
         vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
     pipelines.push_back(pipeline);
-    return pipeline;
+    return {pipeline.index};
 }
 
-void PipelineBuilder::shutdown()
+void PipelineBuilder::recompile_pipelines()
 {
-    for (auto& pipeline : pipelines)
+    pipeline_index = 0;
+    std::vector<Pipeline> old_pipelines = std::move(pipelines);
+    for (auto& pipeline : old_pipelines)
     {
-        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
         vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+
+        if (pipeline.compute_shader == "")
+        {
+            create_graphics_pipeline(pipeline.vert_shader, pipeline.frag_shader,
+                                     pipeline.descriptor_layouts, pipeline.render_pass,
+                                     pipeline.extent);
+        }
+        else
+        {
+            create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts);
+        }
     }
+}
+
+std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) const
+{
+    std::filesystem::path shader_path;
+    if (source_folder != "")
+        shader_path = source_folder + "/assets/shaders/" + filename;
+    else
+        shader_path = "assets/shaders/" + filename;
+    // shader_path.make_preferred();
+    std::ifstream file(shader_path, std::ios::ate | std::ios::binary);
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open file: " + filename << '\n';
+        return {};
+    }
+    size_t file_size = (size_t)file.tellg();
+    std::vector<char> buffer(file_size);
+    file.seekg(0);
+    file.read(buffer.data(), file_size);
+
+    std::vector<uint32_t> aligned_code(buffer.size() / 4);
+    memcpy(aligned_code.data(), buffer.data(), buffer.size());
+
+    return aligned_code;
 }
 
 void PipelineBuilder::create_pipeline_layout(

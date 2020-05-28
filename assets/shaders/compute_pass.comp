@@ -6,6 +6,7 @@
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(binding = 0, rgba8) uniform writeonly image2D result_image;
 layout(binding = 1) uniform Background { vec4 color; }
+
 background;
 
 // Global Variables //
@@ -38,9 +39,9 @@ bool intersect_spheres(Ray ray)
 
 Ray get_ray(vec2 pixel)
 {
-    return Ray(cam.origin, normalize((cam.center + cam.horizontal * pixel.x +
-                                      cam.vertical * pixel.y) -
-                                     cam.origin));
+    return Ray(
+        cam.origin,
+        normalize((cam.center + cam.horizontal * pixel.x + cam.vertical * pixel.y) - cam.origin));
 }
 
 void main()
@@ -79,7 +80,7 @@ void main()
     if (intersect_spheres(ray))
         final_color = vec4(1, 1, 1, 0);
     else
-        final_color = background.color;  // vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
+        final_color = vec4(0, 1, 1, 0);  // vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
 
     imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), final_color);
 }
