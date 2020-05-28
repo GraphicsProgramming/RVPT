@@ -9,10 +9,10 @@
 #include <array>
 #include <numeric>
 
-class timer
+class Timer
 {
 public:
-    timer();
+    Timer();
 
     void stop();
     void frame_start();

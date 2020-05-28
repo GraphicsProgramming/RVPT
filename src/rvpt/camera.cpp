@@ -9,7 +9,7 @@
 camera::camera(float aspect) : fov(90), aspect(aspect)
 {
     recalculate_values();
-    matrix = glm::translate(glm::vec3(0, 0, 0));
+    matrix = glm::mat4();
 }
 
 camera::~camera() = default;
@@ -19,9 +19,12 @@ void camera::move(float x, float y, float z)
     matrix *= glm::translate(glm::vec3(x, y, z));
 }
 
-void camera::rotate(float amount, glm::vec3 axis)
+void camera::rotate(float x, float y)
 {
-    matrix = glm::rotate(matrix, amount, axis);
+    matrix /= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
+    x_angle += x;
+    y_angle += y;
+    matrix *= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
 }
 
 void camera::set_fov(float in_fov)
@@ -45,11 +48,14 @@ void camera::recalculate_values()
 std::vector<glm::vec4> camera::get_data()
 {
     std::vector<glm::vec4> data;
-    data.emplace_back(origin, 1);
+    data.emplace_back(origin, 0);
     data.emplace_back(center, 0);
     data.emplace_back(horizontal, 0);
     data.emplace_back(vertical, 0);
-    for(auto& vec4 : data)
-        vec4 = matrix * vec4;
+    data.emplace_back(matrix[0]);
+    data.emplace_back(matrix[1]);
+    data.emplace_back(matrix[2]);
+    data.emplace_back(matrix[3]);
+
     return data;
 }

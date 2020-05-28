@@ -46,7 +46,7 @@ public:
     void shutdown();
 
     camera scene_camera;
-    timer time;
+    Timer time;
 private:
     Window& window_ref;
 

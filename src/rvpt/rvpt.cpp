@@ -93,6 +93,7 @@ bool RVPT::update() { return true; }
 
 RVPT::draw_return RVPT::draw()
 {
+    time.frame_start();
     compute_work_fence->wait();
     compute_work_fence->reset();
 
@@ -148,6 +149,7 @@ RVPT::draw_return RVPT::draw()
         assert(false);
     }
     current_frame_index = (current_frame_index + 1) % sync_resources.size();
+    time.frame_stop();
     return draw_return::success;
 }
 
