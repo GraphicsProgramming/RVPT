@@ -36,11 +36,6 @@ Window::~Window()
 
 void Window::poll_events() { glfwPollEvents(); }
 
-void Window::add_key_callback(std::function<void(int, Action)> callback)
-{
-    key_callbacks.push_back(callback);
-}
-
 void Window::add_mouse_click_callback(std::function<void(Mouse, Action)> callback)
 {
     mouse_click_callbacks.push_back(callback);
@@ -56,26 +51,18 @@ void Window::add_scroll_callback(std::function<void(float x, float y)> callback)
     scroll_callbacks.push_back(callback);
 }
 
+bool Window::is_key_down(Window::KeyCode keycode)
+{
+    return keys_down.find(static_cast<int>(keycode)) != keys_down.end();
+}
+
 void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    Action callback_action;
-    switch (action)
-    {
-        case GLFW_RELEASE:
-            callback_action = Action::RELEASE;
-            break;
-        case GLFW_PRESS:
-            callback_action = Action::PRESS;
-            break;
-        case GLFW_REPEAT:
-            callback_action = Action::REPEAT;
-            break;
-        default:
-            callback_action = Action::UNKNOWN;
-    }
-
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for (auto& callback : window_ptr->key_callbacks) callback(key, callback_action);
+    if (action == GLFW_RELEASE)
+        window_ptr->keys_down.erase(key);
+    else if (action == GLFW_PRESS)
+        window_ptr->keys_down.insert(key);
 }
 
 void Window::mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
