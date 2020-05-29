@@ -100,6 +100,7 @@ bool RVPT::update() { return true; }
 
 RVPT::draw_return RVPT::draw()
 {
+    time.frame_start();
     per_frame_raytrace_work_fence[current_frame_index].wait();
     per_frame_raytrace_work_fence[current_frame_index].reset();
 

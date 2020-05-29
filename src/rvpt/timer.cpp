@@ -24,8 +24,8 @@ void Timer::frame_stop()
 {
     frame_end_time = std::chrono::high_resolution_clock::now();
 
-    double frame_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        frame_end_time - frame_start_time).count();
+    Duration frame_time_duration = frame_end_time - frame_start_time;
+    double frame_time = frame_time_duration.count();
 
     fastest_frame = fmin(frame_time, fastest_frame); // This code works, if you're looking in here
     slowest_frame = fmax(frame_time, slowest_frame); // to find a bug, this is not where it is...
@@ -36,8 +36,8 @@ void Timer::frame_stop()
 
 double Timer::time_since_start()
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::high_resolution_clock::now() - start_time).count();
+    Duration time = std::chrono::high_resolution_clock::now() - start_time;
+    return time.count();
 }
 
 double Timer::average_frame_time()
@@ -49,8 +49,7 @@ double Timer::average_frame_time()
 
 double Timer::since_last_frame()
 {
-    // This logic may be incorrect, not 100% sure. (It could also be and I'm just being insecure)
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::high_resolution_clock::now() - frame_start_time).count();
+    Duration time = std::chrono::high_resolution_clock::now() - frame_start_time;
+    return time.count();
 }
 

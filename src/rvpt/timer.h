@@ -26,6 +26,7 @@ public:
     double slowest_frame = std::numeric_limits<double>::min();
     std::array<double, 50> past_frame_times{};
 private:
+    using Duration = std::chrono::duration<double, std::ratio<1, 1>>;
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
     std::chrono::time_point<std::chrono::high_resolution_clock> end_time;
     std::chrono::time_point<std::chrono::high_resolution_clock> frame_start_time;

@@ -13,7 +13,7 @@ layout(binding = 1) uniform Camera {vec3 origin; vec3 center; vec3 horizontal; v
 // Global Variables //
 ivec2 dim = imageSize(result_image);
 float aspect = float(dim.x) / float(dim.y);
-Sphere[5] spheres;
+Sphere[13] spheres;
 // End Global Variables //
 
 bool intersect_spheres(Ray ray, inout Record record)
@@ -71,7 +71,7 @@ vec3 trace(in Ray ray)
     vec3 final = vec3(0);
 
     Record record;
-    for(int i=0; i<3; i++)
+    for(int i=0; i<20; i++)
     {
         if (!colour(ray, record))
         {
@@ -88,11 +88,13 @@ vec3 trace(in Ray ray)
 void main()
 {
     // Setup Scene //
-    spheres[0] = Sphere(vec3(0.0f, 0.0f, -10.0f), 1.0f);
-    spheres[1] = Sphere(vec3(0.0f, 0.0f, 10.0f), 1.0f);
-    spheres[2] = Sphere(vec3(-10.0f, 0.0f, 0.0f), 1.0f);
-    spheres[3] = Sphere(vec3(10.0f, 0.0f, 0.0f), 1.0f);
-    spheres[4] = Sphere(vec3(0.0f, 10020.0f, 0.0f), 10000.0f);
+    spheres[0] = Sphere(vec3(0.0f, 0.0f, -6.0f), 5.0f);
+    spheres[1] = Sphere(vec3(0.0f, 0.0f, 6.0f), 5.0f);
+    for(int i=0; i<10; i++)
+    {
+        spheres[i + 2] = Sphere(vec3(0, -(i + 5), 0), 4);
+    }
+    spheres[12] = Sphere(vec3(0.0f, 10020.0f, 0.0f), 10000.0f);
     // End Scene Setup //
 
     vec2 uv = vec2(gl_GlobalInvocationID.xy) / dim;
