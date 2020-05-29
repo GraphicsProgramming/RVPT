@@ -104,7 +104,7 @@ private:
 
     std::optional<RenderingResources> rendering_resources;
     std::vector<VK::Image> per_frame_output_image;
-    std::vector<VK::Buffer> per_frame_uniform_buffer;
+    std::vector<VK::Buffer> per_frame_camera_uniform;
     std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
     std::vector<VK::Fence> per_frame_raytrace_work_fence;
     std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;
@@ -117,7 +117,6 @@ private:
     void create_framebuffers();
 
     RenderingResources create_rendering_resources();
-    PerFrameDescriptorSets create_per_frame_descriptor_sets();
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();

@@ -167,7 +167,6 @@ public:
     ~Window();
 
     float get_aspect_ratio();
-    void add_key_callback(std::function<void(int keycode, Action action)> callback);
     void add_mouse_click_callback(std::function<void(Mouse button, Action action)> callback);
     void add_mouse_move_callback(std::function<void(float x, float y)> callback);
     void add_scroll_callback(std::function<void(float x, float y)> callback);
@@ -184,7 +183,6 @@ public:
 private:
     std::unordered_set<int> keys_down;
 
-    std::vector<std::function<void(int keycode, Action action)>> key_callbacks;
     std::vector<std::function<void(Mouse button, Action action)>> mouse_click_callbacks;
     std::vector<std::function<void(float x, float y)>> mouse_move_callbacks;
     std::vector<std::function<void(float x, float y)>> scroll_callbacks;

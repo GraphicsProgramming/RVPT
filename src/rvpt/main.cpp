@@ -6,6 +6,29 @@
 
 #include "rvpt.h"
 
+void update_camera(Window& window, RVPT& rvpt)
+{
+    glm::vec3 movement;
+    double frameDelta = rvpt.time.time_since_start();
+    if (window.is_key_down(Window::KeyCode::KEY_W))
+            movement.z -= 0.00005 * frameDelta;
+    if (window.is_key_down(Window::KeyCode::KEY_S))
+            movement.z += 0.00005 * frameDelta;
+    if (window.is_key_down(Window::KeyCode::KEY_D))
+            movement.x -= 0.00005 * frameDelta;
+    if (window.is_key_down(Window::KeyCode::KEY_A))
+            movement.x += 0.00005 * frameDelta;
+    if (window.is_key_down(Window::KeyCode::KEY_UP))
+            rvpt.scene_camera.rotate(-0.005, 0);
+    if (window.is_key_down(Window::KeyCode::KEY_DOWN))
+            rvpt.scene_camera.rotate(0.005, 0);
+    if (window.is_key_down(Window::KeyCode::KEY_RIGHT))
+            rvpt.scene_camera.rotate(0, -0.005);
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT))
+            rvpt.scene_camera.rotate(0, 0.005);
+    rvpt.scene_camera.move(movement.x, movement.y, movement.z);
+}
+
 int main()
 {
     Window::Settings settings;
@@ -22,41 +45,6 @@ int main()
         return 0;
     }
 
-    // Camera movement callback
-    window.add_key_callback([&](int keycode, Window::Action action){
-        glm::vec3 movement;
-        double frameDelta = rvpt.time.time_since_start();
-        switch(keycode)
-        {
-            case 87:
-                movement.z -= 0.00005 * frameDelta;
-                break;
-            case 83:
-                movement.z += 0.00005 * frameDelta;
-                break;
-            case 68:
-                movement.x -= 0.00005 * frameDelta;
-                break;
-            case 65:
-                movement.x += 0.00005 * frameDelta;
-                break;
-            case 265:
-                rvpt.scene_camera.rotate(-0.005, 0);
-                break;
-            case 264:
-                rvpt.scene_camera.rotate(0.005, 0);
-                break;
-            case 263:
-                rvpt.scene_camera.rotate(0, -0.005);
-                break;
-            case 262:
-                rvpt.scene_camera.rotate(0, 0.005);
-                break;
-
-        }
-        rvpt.scene_camera.move(movement.x, movement.y, movement.z);
-    });
-
     while (!window.should_close())
     {
         window.poll_events();
@@ -64,6 +52,7 @@ int main()
             window.set_close();
         if(window.is_key_down(Window::KeyCode::KEY_R))
             rvpt.reload_shaders();
+        update_camera(window, rvpt);
         rvpt.update();
         rvpt.draw();
     }

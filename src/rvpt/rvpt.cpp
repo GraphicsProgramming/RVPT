@@ -51,8 +51,8 @@ bool RVPT::initialize()
             VK_IMAGE_TILING_OPTIMAL, 512, 512,
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
             static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
-        per_frame_uniform_buffer.emplace_back(vk_device, memory_allocator,
-                                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 16,
+        per_frame_camera_uniform.emplace_back(vk_device, memory_allocator,
+                                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 64,
                                               VK::MemoryUsage::cpu_to_gpu);
         per_frame_raytrace_command_buffer.emplace_back(
             vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue);
@@ -73,15 +73,15 @@ bool RVPT::initialize()
             per_frame_descriptor_sets[i].image_descriptor_set.set);
         vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
-        per_frame_uniform_buffer[i].map();
+        per_frame_camera_uniform[i].map();
         glm::vec4 background_color{0.2f, 0.3f, 0.4f, 0.5f};
-        per_frame_uniform_buffer[i].copy_to(background_color);
+        per_frame_camera_uniform[i].copy_to(background_color);
 
         VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                                image_descriptor_info};
 
         std::vector<VkDescriptorBufferInfo> buffer_descriptor_info = {
-            per_frame_uniform_buffer[i].descriptor_info()};
+            per_frame_camera_uniform[i].descriptor_info()};
         VK::DescriptorUse buffer_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                                 buffer_descriptor_info};
 
@@ -103,7 +103,7 @@ RVPT::draw_return RVPT::draw()
     per_frame_raytrace_work_fence[current_frame_index].wait();
     per_frame_raytrace_work_fence[current_frame_index].reset();
 
-    camera_matrix_uniform_buffer->copy_to(scene_camera.get_data());
+    per_frame_camera_uniform[current_frame_index].copy_to(scene_camera.get_data());
 
     record_compute_command_buffer();
 
@@ -167,7 +167,7 @@ void RVPT::shutdown()
     present_queue->wait_idle();
 
     per_frame_output_image.clear();
-    per_frame_uniform_buffer.clear();
+    per_frame_camera_uniform.clear();
     per_frame_raytrace_command_buffer.clear();
     per_frame_raytrace_work_fence.clear();
     rendering_resources.reset();
