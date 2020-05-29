@@ -209,7 +209,7 @@ void RVPT::reload_shaders()
                double_backslash + "\\\\scripts\\\\compile_shaders.bat";
     std::cout << str << "\n";
     std::system(str.c_str());
-#elif UNIX
+#elif __unix__
     auto str = std::string("cd ") + source_folder + "/assets/shaders && bash " + source_folder +
                "/scripts/compile_shaders.sh";
     std::system(str.c_str());

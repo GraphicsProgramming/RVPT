@@ -3,7 +3,6 @@
 #include <cstring>
 
 #include <algorithm>
-#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <type_traits>
@@ -709,31 +708,6 @@ void PipelineBuilder::recompile_pipelines()
             create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts);
         }
     }
-}
-
-std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) const
-{
-    std::filesystem::path shader_path;
-    if (source_folder != "")
-        shader_path = source_folder + "/assets/shaders/" + filename;
-    else
-        shader_path = "assets/shaders/" + filename;
-    // shader_path.make_preferred();
-    std::ifstream file(shader_path, std::ios::ate | std::ios::binary);
-    if (!file.is_open())
-    {
-        std::cerr << "Failed to open file: " + filename << '\n';
-        return {};
-    }
-    size_t file_size = (size_t)file.tellg();
-    std::vector<char> buffer(file_size);
-    file.seekg(0);
-    file.read(buffer.data(), file_size);
-
-    std::vector<uint32_t> aligned_code(buffer.size() / 4);
-    memcpy(aligned_code.data(), buffer.data(), buffer.size());
-
-    return aligned_code;
 }
 
 std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) const
