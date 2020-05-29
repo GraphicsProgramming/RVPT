@@ -1,12 +1,14 @@
 #include "vk_util.h"
 
+#include <cstring>
+
 #include <algorithm>
 #include <fstream>
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <cstring>
+
 namespace VK
 {
 const char* error_str(const VkResult result)
@@ -226,11 +228,15 @@ CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
 }
 CommandBuffer& CommandBuffer::operator=(CommandBuffer&& other) noexcept
 {
-    device = other.device;
-    queue = other.queue;
-    pool = std::move(other.pool);
-    command_buffer = other.command_buffer;
-    other.command_buffer = VK_NULL_HANDLE;
+    if (this != &other)
+    {
+        if (command_buffer != nullptr) pool.free(command_buffer);
+        device = other.device;
+        queue = other.queue;
+        pool = std::move(other.pool);
+        command_buffer = other.command_buffer;
+        other.command_buffer = VK_NULL_HANDLE;
+    }
     return *this;
 }
 
@@ -372,7 +378,7 @@ auto create_descriptor_pool(VkDevice device,
 DescriptorPool::DescriptorPool(VkDevice device,
                                std::vector<VkDescriptorSetLayoutBinding> const& bindings,
                                uint32_t count)
-    : layout(create_descriptor_set_layout(device, bindings)),
+    : vk_layout(create_descriptor_set_layout(device, bindings)),
       pool(create_descriptor_pool(device, bindings, count)),
       max_sets(count)
 {
@@ -386,17 +392,19 @@ DescriptorSet DescriptorPool::allocate()
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool = pool.handle;
     alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &layout.handle;
+    alloc_info.pSetLayouts = &vk_layout.handle;
 
     VkResult res = vkAllocateDescriptorSets(pool.device, &alloc_info, &set);
     assert(res == VK_SUCCESS);
 
-    return DescriptorSet{pool.device, set, layout.handle};
+    return DescriptorSet{pool.device, set, vk_layout.handle};
 }
 void DescriptorPool::free(DescriptorSet set)
 {
     if (current_sets > 0) vkFreeDescriptorSets(pool.device, pool.handle, 1, &set.set);
 }
+
+VkDescriptorSetLayout DescriptorPool::layout() { return vk_layout.handle; }
 
 // Render Pass
 
@@ -493,33 +501,41 @@ ShaderModule::ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_c
 {
 }
 
-std::vector<uint32_t> load_spirv(std::string const& filename)
+PipelineBuilder::PipelineBuilder(VkDevice device, std::string const& source_folder)
+    : device(device), source_folder(source_folder)
 {
-    std::ifstream file("assets/shaders/" + filename, std::ios::ate | std::ios::binary);
-    if (!file.is_open())
-    {
-        std::cerr << "Failed to open file: " + filename << '\n';
-        return {};
-    }
-    size_t file_size = (size_t)file.tellg();
-    std::vector<char> buffer(file_size);
-    file.seekg(0);
-    file.read(buffer.data(), file_size);
-
-    std::vector<uint32_t> aligned_code(buffer.size() / 4);
-    memcpy(aligned_code.data(), buffer.data(), buffer.size());
-
-    return aligned_code;
 }
 
-PipelineBuilder::PipelineBuilder(VkDevice device) : device(device) {}
+void PipelineBuilder::shutdown()
+{
+    for (auto& pipeline : pipelines)
+    {
+        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+        vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+    }
+}
 
-Pipeline PipelineBuilder::create_graphics_pipeline(
+VkPipelineLayout PipelineBuilder::get_layout(PipelineHandle const& handle)
+{
+    return pipelines.at(handle.index).layout;
+}
+VkPipeline PipelineBuilder::get_pipeline(PipelineHandle const& handle)
+{
+    return pipelines.at(handle.index).pipeline;
+}
+
+PipelineHandle PipelineBuilder::create_graphics_pipeline(
     std::string vert_shader, std::string frag_shader,
     std::vector<VkDescriptorSetLayout> descriptor_layouts, VkRenderPass render_pass,
     VkExtent2D extent)
 {
     Pipeline pipeline;
+    pipeline.index = get_next_index();
+    pipeline.vert_shader = vert_shader;
+    pipeline.frag_shader = frag_shader;
+    pipeline.descriptor_layouts = descriptor_layouts;
+    pipeline.render_pass = render_pass;
+    pipeline.extent = extent;
 
     auto vertex_code = load_spirv(vert_shader);
     assert(vertex_code.size());
@@ -635,13 +651,16 @@ Pipeline PipelineBuilder::create_graphics_pipeline(
         vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
 
     pipelines.push_back(pipeline);
-    return pipeline;
+    return {pipeline.index};
 }
 
-Pipeline PipelineBuilder::create_compute_pipeline(
+PipelineHandle PipelineBuilder::create_compute_pipeline(
     std::string compute_shader, std::vector<VkDescriptorSetLayout> descriptor_layouts)
 {
     Pipeline pipeline;
+    pipeline.index = get_next_index();
+    pipeline.compute_shader = compute_shader;
+    pipeline.descriptor_layouts = descriptor_layouts;
 
     auto compute_code = load_spirv(compute_shader);
     assert(compute_code.size());
@@ -666,16 +685,64 @@ Pipeline PipelineBuilder::create_compute_pipeline(
     VK_CHECK_RESULT(
         vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
     pipelines.push_back(pipeline);
-    return pipeline;
+    return {pipeline.index};
 }
 
-void PipelineBuilder::shutdown()
+void PipelineBuilder::recompile_pipelines()
 {
-    for (auto& pipeline : pipelines)
+    pipeline_index = 0;
+    std::vector<Pipeline> old_pipelines = std::move(pipelines);
+    for (auto& pipeline : old_pipelines)
     {
-        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
         vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+
+        if (pipeline.compute_shader == "")
+        {
+            create_graphics_pipeline(pipeline.vert_shader, pipeline.frag_shader,
+                                     pipeline.descriptor_layouts, pipeline.render_pass,
+                                     pipeline.extent);
+        }
+        else
+        {
+            create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts);
+        }
     }
+}
+
+std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) const
+{
+    std::string shader_path;
+    if (source_folder != "")
+        shader_path = source_folder + "/assets/shaders/" + filename;
+    else
+        shader_path = "assets/shaders/" + filename;
+#ifdef WIN32
+    std::string win_path;
+    for (auto& c : shader_path)
+    {
+        if (c == '/')
+            win_path.push_back('\\');
+        else
+            win_path.push_back(c);
+    }
+    shader_path = win_path;
+#endif
+    std::ifstream file(shader_path, std::ios::ate | std::ios::binary);
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open file: " + filename << '\n';
+        return {};
+    }
+    size_t file_size = (size_t)file.tellg();
+    std::vector<char> buffer(file_size);
+    file.seekg(0);
+    file.read(buffer.data(), file_size);
+
+    std::vector<uint32_t> aligned_code(buffer.size() / 4);
+    memcpy(aligned_code.data(), buffer.data(), buffer.size());
+
+    return aligned_code;
 }
 
 void PipelineBuilder::create_pipeline_layout(
@@ -704,7 +771,9 @@ void MemoryAllocator::shutdown()
     buffer_allocations.clear();
 }
 
-bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage)
+MemoryAllocator::Allocation<VkImage> MemoryAllocator::allocate_image(VkImage image,
+                                                                     VkDeviceSize size,
+                                                                     MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetImageMemoryRequirements(device, image, &memory_requirements);
@@ -716,12 +785,14 @@ bool MemoryAllocator::allocate_image(VkImage image, VkDeviceSize size, MemoryUsa
 
     vkBindImageMemory(device, image, device_memory.handle, 0);
 
-    Allocation alloc{size, std::move(device_memory)};
+    InternalAllocation alloc{size, std::move(device_memory)};
     image_allocations.emplace_back(image, std::move(alloc));
-    return true;
+    return Allocation(this, image);
 }
 
-bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage)
+MemoryAllocator::Allocation<VkBuffer> MemoryAllocator::allocate_buffer(VkBuffer buffer,
+                                                                       VkDeviceSize size,
+                                                                       MemoryUsage usage)
 {
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, buffer, &memory_requirements);
@@ -733,16 +804,16 @@ bool MemoryAllocator::allocate_buffer(VkBuffer buffer, VkDeviceSize size, Memory
 
     vkBindBufferMemory(device, buffer, device_memory.handle, 0);
 
-    Allocation alloc{memory_requirements.size, std::move(device_memory)};
+    InternalAllocation alloc{memory_requirements.size, std::move(device_memory)};
     buffer_allocations.emplace_back(buffer, std::move(alloc));
-    return true;
+
+    return Allocation(this, buffer);
 }
 
 void MemoryAllocator::free(VkImage image)
 {
     auto it = std::find_if(std::begin(image_allocations), std::end(image_allocations),
                            [&](auto const& elem) { return elem.first == image; });
-
     if (it != std::end(image_allocations))
     {
         image_allocations.erase(it);
@@ -805,7 +876,6 @@ HandleWrapper<VkDeviceMemory, PFN_vkFreeMemory> MemoryAllocator::create_device_m
     allocation_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocation_info.allocationSize = max_size;
     allocation_info.memoryTypeIndex = memory_type_index;
-    // find_memory_type(memRequirements.memoryTypeBits, properties);
 
     VkDeviceMemory memory;
     VK_CHECK_RESULT(vkAllocateMemory(device, &allocation_info, nullptr, &memory));
@@ -898,7 +968,7 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat fo
              VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       image(create_image(device, format, tiling, {width, height, 1}, usage)),
-      successfully_got_memory(memory.allocate_image(image.handle, size, memory_usage)),
+      image_allocation(memory.allocate_image(image.handle, size, memory_usage)),
       image_view(create_image_view(device, image.handle, format)),
       sampler(create_sampler(device)),
       format(format),
@@ -917,7 +987,6 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat fo
     queue.submit(cmd_buf, fence);
     fence.wait();
 }
-Image::~Image() { memory_ptr->free(image.handle); }
 
 VkDescriptorImageInfo Image::descriptor_info() const
 {
@@ -942,12 +1011,12 @@ auto create_buffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
 
 Buffer::Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
                VkDeviceSize size, MemoryUsage memory_usage)
-    : buffer(create_buffer(device, size, usage)), memory_ptr(&memory), size(size)
+    : memory_ptr(&memory),
+      buffer(create_buffer(device, size, usage)),
+      buffer_allocation(memory.allocate_buffer(buffer.handle, size, memory_usage)),
+      size(size)
 {
-    memory.allocate_buffer(buffer.handle, size, memory_usage);
 }
-Buffer::~Buffer() { memory_ptr->free(buffer.handle); }
-
 void Buffer::map()
 {
     memory_ptr->map(buffer.handle, &mapped_ptr);

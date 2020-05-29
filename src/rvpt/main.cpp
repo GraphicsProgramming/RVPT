@@ -60,6 +60,10 @@ int main()
     while (!window.should_close())
     {
         window.poll_events();
+        if (window.is_key_down(Window::KeyCode::KEY_ESCAPE))
+            window.set_close();
+        if(window.is_key_down(Window::KeyCode::KEY_R))
+            rvpt.reload_shaders();
         rvpt.update();
         rvpt.draw();
     }

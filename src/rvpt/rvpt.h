@@ -44,11 +44,14 @@ public:
     draw_return draw();
 
     void shutdown();
+    void reload_shaders();
 
     camera scene_camera;
     Timer time;
+
 private:
     Window& window_ref;
+    std::string source_folder = "";
 
     // from a callback
     bool framebuffer_resized = false;
@@ -80,21 +83,31 @@ private:
     std::vector<VkFence> frames_inflight_fences;
 
     VkRenderPass fullscreen_tri_render_pass;
-    VK::Pipeline fullscreen_triangle_pipeline;
 
     std::vector<VK::Framebuffer> framebuffers;
 
-    std::optional<VK::Image> sampled_image;
-    std::optional<VK::DescriptorPool> sampled_image_pool;
-    std::optional<VK::DescriptorSet> sampled_image_descriptor_set;
+    struct RenderingResources
+    {
+        VK::DescriptorPool image_pool;
 
-    std::optional<VK::DescriptorPool> compute_descriptor_pool;
-    std::optional<VK::DescriptorSet> compute_descriptor_set;
-    VK::Pipeline compute_pipeline;
-    std::optional<VK::CommandBuffer> compute_command_buffer;
-    std::optional<VK::Fence> compute_work_fence;
+        VK::DescriptorPool raytrace_descriptor_pool;
 
-    std::optional<VK::Buffer> camera_matrix_uniform_buffer;
+        VK::PipelineHandle fullscreen_triangle_pipeline;
+        VK::PipelineHandle raytrace_pipeline;
+    };
+
+    struct PerFrameDescriptorSets
+    {
+        VK::DescriptorSet image_descriptor_set;
+        VK::DescriptorSet raytracing_descriptor_sets;
+    };
+
+    std::optional<RenderingResources> rendering_resources;
+    std::vector<VK::Image> per_frame_output_image;
+    std::vector<VK::Buffer> per_frame_uniform_buffer;
+    std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
+    std::vector<VK::Fence> per_frame_raytrace_work_fence;
+    std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;
 
     // helper functions
     bool context_init();
@@ -102,6 +115,9 @@ private:
     bool swapchain_reinit();
     bool swapchain_get_images();
     void create_framebuffers();
+
+    RenderingResources create_rendering_resources();
+    PerFrameDescriptorSets create_per_frame_descriptor_sets();
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();

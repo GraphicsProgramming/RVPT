@@ -1,16 +1,31 @@
 #include "rvpt.h"
 
+#include <cstdlib>
+
+#include <algorithm>
+#include <fstream>
+
 #include <glm/glm.hpp>
 #include <glm/glm/ext.hpp>
+#include <nlohmann/json.hpp>
 
-RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio()) {}
+RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio())
+{
+    std::ifstream input("project_configuration.json");
+    nlohmann::json json;
+    input >> json;
+    if (json.contains("project_source_dir"))
+    {
+        source_folder = json["project_source_dir"];
+    }
+}
 
 RVPT::~RVPT() {}
 
 bool RVPT::initialize()
 {
     bool init = context_init();
-    pipeline_builder = VK::PipelineBuilder(vk_device);
+    pipeline_builder = VK::PipelineBuilder(vk_device, source_folder);
     memory_allocator =
         VK::MemoryAllocator(context.device.physical_device.physical_device, vk_device);
 
@@ -26,66 +41,58 @@ bool RVPT::initialize()
 
     create_framebuffers();
 
-    // output image
+    rendering_resources = create_rendering_resources();
 
-    sampled_image.emplace(
-        vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_TILING_OPTIMAL, 512, 512, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-        VK_IMAGE_LAYOUT_GENERAL, static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        // resources
+        per_frame_output_image.emplace_back(
+            vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_TILING_OPTIMAL, 512, 512,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+            static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
+        per_frame_uniform_buffer.emplace_back(vk_device, memory_allocator,
+                                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 16,
+                                              VK::MemoryUsage::cpu_to_gpu);
+        per_frame_raytrace_command_buffer.emplace_back(
+            vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue);
+        per_frame_raytrace_work_fence.emplace_back(vk_device);
 
-    std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+        // descriptor sets
+        per_frame_descriptor_sets.push_back(
+            {rendering_resources->image_pool.allocate(),
+             rendering_resources->raytrace_descriptor_pool.allocate()});
 
-    sampled_image_pool.emplace(vk_device, layout_bindings, 1);
-    sampled_image_descriptor_set = sampled_image_pool->allocate();
+        // update descriptor sets with resources
+        std::vector<VkDescriptorImageInfo> image_descriptor_info = {
+            per_frame_output_image[i].descriptor_info()};
+        VK::DescriptorUse descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                         image_descriptor_info};
 
-    std::vector<VkDescriptorImageInfo> image_descriptor_info = {sampled_image->descriptor_info()};
-    VK::DescriptorUse descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                     image_descriptor_info};
+        auto write_descriptor = descriptor_use.get_write_descriptor_set(
+            per_frame_descriptor_sets[i].image_descriptor_set.set);
+        vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
-    auto write_descriptor =
-        descriptor_use.get_write_descriptor_set(sampled_image_descriptor_set->set);
-    vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
+        per_frame_uniform_buffer[i].map();
+        glm::vec4 background_color{0.2f, 0.3f, 0.4f, 0.5f};
+        per_frame_uniform_buffer[i].copy_to(background_color);
 
-    fullscreen_triangle_pipeline = pipeline_builder.create_graphics_pipeline(
-        "fullscreen_tri.vert.spv", "tex_sample.frag.spv", {sampled_image_descriptor_set->layout},
-        fullscreen_tri_render_pass, vkb_swapchain.extent);
+        VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                               image_descriptor_info};
 
-    // Compute
+        std::vector<VkDescriptorBufferInfo> buffer_descriptor_info = {
+            per_frame_uniform_buffer[i].descriptor_info()};
+        VK::DescriptorUse buffer_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                                buffer_descriptor_info};
 
-    camera_matrix_uniform_buffer.emplace(vk_device, memory_allocator,
-                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 48,
-                           VK::MemoryUsage::cpu_to_gpu);
-    camera_matrix_uniform_buffer->map();
-    camera_matrix_uniform_buffer->copy_to(scene_camera.get_data());
+        VkWriteDescriptorSet write_descriptors[] = {
+            image_descriptor_use.get_write_descriptor_set(
+                per_frame_descriptor_sets[i].raytracing_descriptor_sets.set),
+            buffer_descriptor_use.get_write_descriptor_set(
+                per_frame_descriptor_sets[i].raytracing_descriptor_sets.set)};
 
-    std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
-
-    compute_descriptor_pool.emplace(vk_device, compute_layout_bindings, 1);
-    compute_descriptor_set = compute_descriptor_pool->allocate();
-
-    VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                           image_descriptor_info};
-
-    std::vector<VkDescriptorBufferInfo> buffer_descriptor_info = {
-        camera_matrix_uniform_buffer->descriptor_info()};
-    VK::DescriptorUse buffer_descriptor_use{
-        1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer_descriptor_info};
-
-    VkWriteDescriptorSet write_descriptors[] = {
-        image_descriptor_use.get_write_descriptor_set(compute_descriptor_set->set),
-        buffer_descriptor_use.get_write_descriptor_set(compute_descriptor_set->set)};
-
-    vkUpdateDescriptorSets(vk_device, 2, write_descriptors, 0, nullptr);
-
-    compute_pipeline = pipeline_builder.create_compute_pipeline("compute_pass.comp.spv",
-                                                                {compute_descriptor_set->layout});
-
-    compute_command_buffer.emplace(vk_device,
-                                   compute_queue.has_value() ? *compute_queue : *graphics_queue);
-    compute_work_fence.emplace(vk_device);
+        vkUpdateDescriptorSets(vk_device, 2, write_descriptors, 0, nullptr);
+    }
 
     return init;
 }
@@ -93,16 +100,16 @@ bool RVPT::update() { return true; }
 
 RVPT::draw_return RVPT::draw()
 {
-    time.frame_start();
-    compute_work_fence->wait();
-    compute_work_fence->reset();
+    per_frame_raytrace_work_fence[current_frame_index].wait();
+    per_frame_raytrace_work_fence[current_frame_index].reset();
 
     camera_matrix_uniform_buffer->copy_to(scene_camera.get_data());
 
     record_compute_command_buffer();
 
     VK::Queue& compute_submit = compute_queue.has_value() ? *compute_queue : *graphics_queue;
-    compute_submit.submit(compute_command_buffer.value(), compute_work_fence.value());
+    compute_submit.submit(per_frame_raytrace_command_buffer[current_frame_index],
+                          per_frame_raytrace_work_fence[current_frame_index]);
 
     auto& current_frame = sync_resources[current_frame_index];
 
@@ -159,15 +166,11 @@ void RVPT::shutdown()
     graphics_queue->wait_idle();
     present_queue->wait_idle();
 
-    camera_matrix_uniform_buffer.reset();
-
-    compute_work_fence.reset();
-    compute_command_buffer.reset();
-
-    compute_descriptor_pool.reset();
-
-    sampled_image_pool.reset();
-    sampled_image.reset();
+    per_frame_output_image.clear();
+    per_frame_uniform_buffer.clear();
+    per_frame_raytrace_command_buffer.clear();
+    per_frame_raytrace_work_fence.clear();
+    rendering_resources.reset();
 
     VK::destroy_render_pass(vk_device, fullscreen_tri_render_pass);
 
@@ -182,6 +185,44 @@ void RVPT::shutdown()
     vkb::destroy_device(context.device);
     vkDestroySurfaceKHR(context.inst.instance, context.surf, nullptr);
     vkb::destroy_instance(context.inst);
+}
+
+void replace_all(std::string& str, const std::string& from, const std::string& to)
+{
+    if (from.empty()) return;
+    size_t start_pos = 0;
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+    {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();  // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
+}
+
+void RVPT::reload_shaders()
+{
+    if (source_folder == "")
+    {
+        std::cout << "source_folder not set, unable to reload shaders\n";
+        return;
+    }
+
+#ifdef WIN32
+    auto double_backslash = source_folder;
+    replace_all(double_backslash, "/", "\\\\");
+    auto str = std::string("cd ") + double_backslash + "\\\\assets\\\\shaders && " +
+               double_backslash + "\\\\scripts\\\\compile_shaders.bat";
+    std::cout << str << "\n";
+    std::system(str.c_str());
+#elif __unix__
+    auto str = std::string("cd ") + source_folder + "/assets/shaders && bash " + source_folder +
+               "/scripts/compile_shaders.sh";
+    std::system(str.c_str());
+#endif
+    if (compute_queue) compute_queue->wait_idle();
+    graphics_queue->wait_idle();
+    present_queue->wait_idle();
+
+    pipeline_builder.recompile_pipelines();
 }
 
 // Private functions //
@@ -322,18 +363,43 @@ void RVPT::create_framebuffers()
     }
 }
 
+RVPT::RenderingResources RVPT::create_rendering_resources()
+{
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+
+    auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT);
+
+    std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
+
+    auto raytrace_descriptor_pool =
+        VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
+
+    auto fullscreen_triangle_pipeline = pipeline_builder.create_graphics_pipeline(
+        "fullscreen_tri.vert.spv", "tex_sample.frag.spv", {image_pool.layout()},
+        fullscreen_tri_render_pass, vkb_swapchain.extent);
+
+    auto raytrace_pipeline = pipeline_builder.create_compute_pipeline(
+        "compute_pass.comp.spv", {raytrace_descriptor_pool.layout()});
+
+    return RVPT::RenderingResources{std::move(image_pool), std::move(raytrace_descriptor_pool),
+                                    fullscreen_triangle_pipeline, raytrace_pipeline};
+}
+
 void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index)
 {
     current_frame.command_buffer.begin();
     VkCommandBuffer cmd_buf = current_frame.command_buffer.get();
 
-    // Image memory barrier to make sure that compute shader writes are finished
-    // before sampling from the texture
+    // Image memory barrier to make sure that compute shader writes are
+    // finished before sampling from the texture
     VkImageMemoryBarrier imageMemoryBarrier = {};
     imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
     imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    imageMemoryBarrier.image = sampled_image->image.handle;
+    imageMemoryBarrier.image = per_frame_output_image[current_frame_index].image.handle;
     imageMemoryBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -366,11 +432,15 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
     VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      fullscreen_triangle_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            fullscreen_triangle_pipeline.layout, 0, 1,
-                            &sampled_image_descriptor_set->set, 0, nullptr);
+    pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline);
+
+    vkCmdBindPipeline(
+        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline));
+    vkCmdBindDescriptorSets(
+        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_builder.get_layout(rendering_resources->fullscreen_triangle_pipeline), 0, 1,
+        &per_frame_descriptor_sets[current_frame_index].image_descriptor_set.set, 0, nullptr);
     vkCmdDraw(cmd_buf, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd_buf);
     current_frame.command_buffer.end();
@@ -378,13 +448,18 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
 
 void RVPT::record_compute_command_buffer()
 {
-    compute_command_buffer->begin();
-    VkCommandBuffer cmd_buf = compute_command_buffer->get();
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.pipeline);
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1,
-                            &compute_descriptor_set->set, 0, 0);
+    auto& command_buffer = per_frame_raytrace_command_buffer[current_frame_index];
+    command_buffer.begin();
+    VkCommandBuffer cmd_buf = command_buffer.get();
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      pipeline_builder.get_pipeline(rendering_resources->raytrace_pipeline));
+    vkCmdBindDescriptorSets(
+        cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+        pipeline_builder.get_layout(rendering_resources->raytrace_pipeline), 0, 1,
+        &per_frame_descriptor_sets[current_frame_index].raytracing_descriptor_sets.set, 0, 0);
 
-    vkCmdDispatch(cmd_buf, sampled_image->width / 16, sampled_image->height / 16, 1);
+    vkCmdDispatch(cmd_buf, per_frame_output_image[current_frame_index].width / 16,
+                  per_frame_output_image[current_frame_index].height / 16, 1);
 
-    compute_command_buffer->end();
+    command_buffer.end();
 }
