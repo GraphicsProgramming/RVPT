@@ -80,7 +80,7 @@ void main()
     if (intersect_spheres(ray))
         final_color = vec4(1, 1, 1, 0);
     else
-        final_color = vec4(1, 1, 1, 0);  // vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
+        final_color = vec4(1, 0, 1, 0);  // vec4(uv.x, uv.y, 1.0 - uv.x, 0.0);
 
     imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), final_color);
 }
