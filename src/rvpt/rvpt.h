@@ -49,13 +49,18 @@ public:
     camera scene_camera;
     Timer time;
 
+    struct RenderSettings
+    {
+        int max_bounces = 8;
+        int aa = 16;
+    } render_settings;
+
 private:
     Window& window_ref;
     std::string source_folder = "";
 
     // from a callback
     bool framebuffer_resized = false;
-
     // Random numbers (generated every frame)
     std::vector<float> random_numbers;
 
@@ -109,6 +114,7 @@ private:
     std::vector<VK::Image> per_frame_output_image;
     std::vector<VK::Buffer> per_frame_camera_uniform;
     std::vector<VK::Buffer> per_frame_random_uniform;
+    std::vector<VK::Buffer> per_frame_settings_uniform;
     std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
     std::vector<VK::Fence> per_frame_raytrace_work_fence;
     std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;

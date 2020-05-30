@@ -61,6 +61,9 @@ bool RVPT::initialize()
         per_frame_random_uniform.emplace_back(vk_device, memory_allocator,
                                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 4096,
                                               VK::MemoryUsage::cpu_to_gpu);
+        per_frame_settings_uniform.emplace_back(vk_device, memory_allocator,
+                                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 8,
+                                                VK::MemoryUsage::cpu_to_gpu);
         per_frame_raytrace_command_buffer.emplace_back(
             vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue);
         per_frame_raytrace_work_fence.emplace_back(vk_device);
@@ -80,7 +83,6 @@ bool RVPT::initialize()
             per_frame_descriptor_sets[i].image_descriptor_set.set);
         vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
-
         VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                                image_descriptor_info};
 
@@ -88,13 +90,19 @@ bool RVPT::initialize()
         std::vector<VkDescriptorBufferInfo> camera_buffer_descriptor_info = {
             per_frame_camera_uniform[i].descriptor_info()};
         VK::DescriptorUse camera_buffer_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                                camera_buffer_descriptor_info};
+                                                       camera_buffer_descriptor_info};
 
         per_frame_random_uniform[i].map();
         std::vector<VkDescriptorBufferInfo> random_buffer_descriptor_info = {
-            per_frame_camera_uniform[i].descriptor_info()};
+            per_frame_random_uniform[i].descriptor_info()};
         VK::DescriptorUse random_buffer_descriptor_use{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                                        random_buffer_descriptor_info};
+
+        per_frame_settings_uniform[i].map();
+        std::vector<VkDescriptorBufferInfo> frame_settings_descriptor_info = {
+            per_frame_settings_uniform[i].descriptor_info()};
+        VK::DescriptorUse frame_settings_descriptor_use{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                                        frame_settings_descriptor_info};
 
         VkWriteDescriptorSet write_descriptors[] = {
             image_descriptor_use.get_write_descriptor_set(
@@ -102,9 +110,11 @@ bool RVPT::initialize()
             camera_buffer_descriptor_use.get_write_descriptor_set(
                 per_frame_descriptor_sets[i].raytracing_descriptor_sets.set),
             random_buffer_descriptor_use.get_write_descriptor_set(
+                per_frame_descriptor_sets[i].raytracing_descriptor_sets.set),
+            frame_settings_descriptor_use.get_write_descriptor_set(
                 per_frame_descriptor_sets[i].raytracing_descriptor_sets.set)};
 
-        vkUpdateDescriptorSets(vk_device, 3, write_descriptors, 0, nullptr);
+        vkUpdateDescriptorSets(vk_device, 4, write_descriptors, 0, nullptr);
     }
 
     return init;
@@ -115,8 +125,7 @@ bool RVPT::update()
     std::mt19937 generator(29472394623);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
 
-    for(int i=0; i<1024; i++)
-        random_numbers[i] = (distribution(generator)) * -1;
+    for (int i = 0; i < 1024; i++) random_numbers[i] = (distribution(generator));
 
     return true;
 }
@@ -129,6 +138,7 @@ RVPT::draw_return RVPT::draw()
 
     per_frame_camera_uniform[current_frame_index].copy_to(scene_camera.get_data());
     per_frame_random_uniform[current_frame_index].copy_to(random_numbers);
+    per_frame_settings_uniform[current_frame_index].copy_to(render_settings);
 
     record_compute_command_buffer();
 
@@ -194,6 +204,7 @@ void RVPT::shutdown()
     per_frame_output_image.clear();
     per_frame_camera_uniform.clear();
     per_frame_random_uniform.clear();
+    per_frame_settings_uniform.clear();
     per_frame_raytrace_command_buffer.clear();
     per_frame_raytrace_work_fence.clear();
     rendering_resources.reset();
@@ -399,7 +410,8 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
+        {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
 
     auto raytrace_descriptor_pool =
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
