@@ -56,6 +56,9 @@ private:
     // from a callback
     bool framebuffer_resized = false;
 
+    // Random numbers (generated every frame)
+    std::vector<float> random_numbers;
+
     struct Context
     {
         VkSurfaceKHR surf{};
@@ -105,6 +108,7 @@ private:
     std::optional<RenderingResources> rendering_resources;
     std::vector<VK::Image> per_frame_output_image;
     std::vector<VK::Buffer> per_frame_camera_uniform;
+    std::vector<VK::Buffer> per_frame_random_uniform;
     std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
     std::vector<VK::Fence> per_frame_raytrace_work_fence;
     std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;

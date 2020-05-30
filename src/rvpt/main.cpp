@@ -11,24 +11,26 @@ void update_camera(Window& window, RVPT& rvpt)
     glm::vec3 movement;
     double frameDelta = rvpt.time.since_last_frame();
     if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT))
-        frameDelta *= 0.5;
+        frameDelta *= 2;
+    if(window.is_key_down(Window::KeyCode::SPACE))
+        movement.y -= 3 * frameDelta;
     if (window.is_key_down(Window::KeyCode::KEY_W))
-            movement.z -= 3 * frameDelta;
+        movement.z -= 3 * frameDelta;
     if (window.is_key_down(Window::KeyCode::KEY_S))
-            movement.z += 3 * frameDelta;
+        movement.z += 3 * frameDelta;
     if (window.is_key_down(Window::KeyCode::KEY_D))
-            movement.x -= 3 * frameDelta;
+        movement.x -= 3 * frameDelta;
     if (window.is_key_down(Window::KeyCode::KEY_A))
-            movement.x += 3 * frameDelta;
-    if (window.is_key_down(Window::KeyCode::KEY_UP))
-            rvpt.scene_camera.rotate(-0.03, 0);
+        movement.x += 3 * frameDelta;
     rvpt.scene_camera.move(movement.x, movement.y, movement.z);
     if (window.is_key_down(Window::KeyCode::KEY_RIGHT))
             rvpt.scene_camera.rotate(0, 0.03);
-    if (window.is_key_down(Window::KeyCode::KEY_DOWN))
-        rvpt.scene_camera.rotate(0.03, 0);
     if (window.is_key_down(Window::KeyCode::KEY_LEFT))
         rvpt.scene_camera.rotate(0, -0.03);
+    if (window.is_key_down(Window::KeyCode::KEY_UP))
+        rvpt.scene_camera.rotate(-0.03, 0);
+    if (window.is_key_down(Window::KeyCode::KEY_DOWN))
+        rvpt.scene_camera.rotate(0.03, 0);
 }
 
 int main()

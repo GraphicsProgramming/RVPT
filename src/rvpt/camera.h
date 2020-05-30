@@ -20,7 +20,7 @@ class camera
 
    private:
     void recalculate_values();
-    float fov, aspect, x_angle, y_angle;
+    float fov, aspect, x_angle{}, y_angle{};
     glm::vec3 origin, center, horizontal, vertical;
     glm::mat4 matrix;
 };
