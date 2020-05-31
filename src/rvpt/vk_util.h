@@ -12,10 +12,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace VK
-{
 const char* error_str(const VkResult result);
-
 #define VK_CHECK_RESULT(f)                                                                         \
     {                                                                                              \
         VkResult res = (f);                                                                        \
@@ -27,6 +24,8 @@ const char* error_str(const VkResult result);
         }                                                                                          \
     }
 
+namespace VK
+{
 constexpr uint32_t FLAGS_NONE = 0;
 
 template <typename T, typename Deleter>
@@ -264,9 +263,21 @@ struct PipelineBuilder
 
     PipelineHandle create_graphics_pipeline(std::string vert_shader, std::string frag_shader,
                                             std::vector<VkDescriptorSetLayout> descriptor_layouts,
+                                            std::vector<VkPushConstantRange> push_constants,
                                             VkRenderPass render_pass, VkExtent2D extent);
     PipelineHandle create_compute_pipeline(std::string compute_shader,
-                                           std::vector<VkDescriptorSetLayout> descriptor_layouts);
+                                           std::vector<VkDescriptorSetLayout> descriptor_layouts,
+                                           std::vector<VkPushConstantRange> push_constants);
+
+    VkPipelineLayout create_pipeline_layout(
+        std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
+        std::vector<VkPushConstantRange> const& push_constants);
+    VkPipeline create_immutable_graphics_pipeline(
+        ShaderModule const& vertex_module, ShaderModule const& fragment_module,
+        VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent,
+        std::vector<VkVertexInputBindingDescription> const& binding_desc,
+        std::vector<VkVertexInputAttributeDescription> const& attribute_desc,
+        bool enable_blending = false);
 
     void recompile_pipelines();
 
@@ -282,6 +293,7 @@ private:
         VkPipeline pipeline = VK_NULL_HANDLE;
         std::string vert_shader, frag_shader, compute_shader;
         std::vector<VkDescriptorSetLayout> descriptor_layouts;
+        std::vector<VkPushConstantRange> push_constants;
         VkRenderPass render_pass;
         VkExtent2D extent;
     };
@@ -290,9 +302,6 @@ private:
     std::vector<Pipeline> pipelines;
 
     uint32_t get_next_index() { return pipeline_index++; }
-
-    void create_pipeline_layout(Pipeline& pipeline,
-                                std::vector<VkDescriptorSetLayout> const& descriptor_layouts);
 
     std::vector<uint32_t> load_spirv(std::string const& filename) const;
 };
@@ -355,6 +364,8 @@ public:
     void map(VkBuffer buffer, void** data_ptr);
     void unmap(VkBuffer buffer);
 
+    void flush(VkBuffer buffer);
+
 private:
     // Unused currently
     struct Pool
@@ -399,6 +410,7 @@ public:
                    VkImageTiling tiling, uint32_t width, uint32_t height, VkImageUsageFlags usage,
                    VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage);
 
+    VkImage get() const { return image.handle; }
     VkDescriptorImageInfo descriptor_info() const;
 
     MemoryAllocator* memory_ptr;
@@ -419,29 +431,36 @@ public:
     explicit Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
                     VkDeviceSize size, MemoryUsage memory_usage);
 
+    VkBuffer get() const { return buffer.handle; }
+
     void map();
     void unmap();
 
     template <typename T>
     void copy_to(std::vector<T> const& data)
     {
-        copy_to(static_cast<void const*>(data.data()), sizeof(T) * data.size());
+        copy_to(reinterpret_cast<void const*>(data.data()), sizeof(T) * data.size());
     }
 
     template <typename T>
     void copy_to(T const& data)
     {
-        copy_to(static_cast<void const*>(&data), sizeof(T));
+        copy_to(reinterpret_cast<void const*>(&data), sizeof(T));
     }
 
+    void copy_bytes(unsigned char* data, size_t size);
+
+    void flush();
+
     VkDescriptorBufferInfo descriptor_info() const;
+    VkDeviceSize size() const;
 
 private:
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
     MemoryAllocator::Allocation<VkBuffer> buffer_allocation;
 
-    VkDeviceSize size;
+    VkDeviceSize buf_size;
     bool is_mapped = false;
     void* mapped_ptr = nullptr;
 

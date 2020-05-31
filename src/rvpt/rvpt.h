@@ -13,11 +13,12 @@
 #include <VkBootstrap.h>
 
 #include "window.h"
+#include "imgui_impl.h"
 #include "vk_util.h"
 #include "camera.h"
 #include "timer.h"
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 class RVPT
 {
@@ -41,6 +42,7 @@ public:
         swapchain_out_of_date
     };
 
+    void update_imgui();
     draw_return draw();
 
     void shutdown();
@@ -92,6 +94,8 @@ private:
     std::vector<VkFence> frames_inflight_fences;
 
     VkRenderPass fullscreen_tri_render_pass;
+
+    std::optional<ImguiImpl> imgui_impl;
 
     std::vector<VK::Framebuffer> framebuffers;
 

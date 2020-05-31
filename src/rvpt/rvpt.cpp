@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/glm/ext.hpp>
 #include <nlohmann/json.hpp>
+#include <imgui/imgui.h>
 
 RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio())
 {
@@ -39,6 +40,9 @@ bool RVPT::initialize()
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
 
     fullscreen_tri_render_pass = VK::create_render_pass(vk_device, vkb_swapchain.image_format);
+
+    imgui_impl.emplace(vk_device, *graphics_queue, pipeline_builder, memory_allocator,
+                       fullscreen_tri_render_pass, vkb_swapchain.extent, MAX_FRAMES_IN_FLIGHT);
 
     create_framebuffers();
 
@@ -121,11 +125,38 @@ bool RVPT::initialize()
 bool RVPT::update()
 {
     // Generate random numbers
-    std::mt19937 generator(29472394623);
+    std::mt19937 generator(29472394623U);
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
 
     for (int i = 0; i < 1024; i++) random_numbers[i] = (distribution(generator));
     return true;
+}
+
+void RVPT::update_imgui()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Setup display size (every frame to accommodate for window resizing)
+    int w, h;
+    int display_w, display_h;
+    auto win_ptr = window_ref.get_window_pointer();
+    glfwGetWindowSize(win_ptr, &w, &h);
+    glfwGetFramebufferSize(win_ptr, &display_w, &display_h);
+    io.DisplaySize = ImVec2((float)w, (float)h);
+    if (w > 0 && h > 0)
+        io.DisplayFramebufferScale = ImVec2((float)display_w / w, (float)display_h / h);
+
+    // Setup time step
+    io.DeltaTime = static_cast<float>(time.since_last_frame());
+
+    static bool is_active = true;
+    static glm::vec3 fake_position;
+    ImGui::SetWindowSize({200, 100});
+    if (ImGui::Begin("My First Tool", &is_active))
+    {
+        ImGui::SliderFloat3("position", glm::value_ptr(fake_position), 0, 1, "", 1);
+    }
+    ImGui::End();
 }
 
 RVPT::draw_return RVPT::draw()
@@ -206,6 +237,8 @@ void RVPT::shutdown()
     per_frame_raytrace_command_buffer.clear();
     per_frame_raytrace_work_fence.clear();
     rendering_resources.reset();
+
+    imgui_impl.reset();
 
     VK::destroy_render_pass(vk_device, fullscreen_tri_render_pass);
 
@@ -415,11 +448,11 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
 
     auto fullscreen_triangle_pipeline = pipeline_builder.create_graphics_pipeline(
-        "fullscreen_tri.vert.spv", "tex_sample.frag.spv", {image_pool.layout()},
+        "fullscreen_tri.vert.spv", "tex_sample.frag.spv", {image_pool.layout()}, {},
         fullscreen_tri_render_pass, vkb_swapchain.extent);
 
     auto raytrace_pipeline = pipeline_builder.create_compute_pipeline(
-        "compute_pass.comp.spv", {raytrace_descriptor_pool.layout()});
+        "compute_pass.comp.spv", {raytrace_descriptor_pool.layout()}, {});
 
     return RVPT::RenderingResources{std::move(image_pool), std::move(raytrace_descriptor_pool),
                                     fullscreen_triangle_pipeline, raytrace_pipeline};
@@ -479,6 +512,9 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
         pipeline_builder.get_layout(rendering_resources->fullscreen_triangle_pipeline), 0, 1,
         &per_frame_descriptor_sets[current_frame_index].image_descriptor_set.set, 0, nullptr);
     vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+
+    imgui_impl->draw(cmd_buf, current_frame_index);
+
     vkCmdEndRenderPass(cmd_buf);
     current_frame.command_buffer.end();
 }
