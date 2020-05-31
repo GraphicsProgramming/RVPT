@@ -2,8 +2,9 @@
 // Created by legend on 5/27/20.
 //
 
-#include <algorithm>
 #include "timer.h"
+
+#include <algorithm>
 
 Timer::Timer() { start_time = std::chrono::high_resolution_clock::now(); }
 

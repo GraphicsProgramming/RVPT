@@ -57,7 +57,6 @@ int main()
         if(window.is_key_down(Window::KeyCode::KEY_R))
             rvpt.reload_shaders();
         update_camera(window, rvpt);
-        std::cout << rvpt.time.average_frame_time() << '\n';
         rvpt.update();
         rvpt.draw();
     }

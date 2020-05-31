@@ -46,7 +46,7 @@ public:
     void shutdown();
     void reload_shaders();
 
-    camera scene_camera;
+    Camera scene_camera;
     Timer time;
 
     struct RenderSettings

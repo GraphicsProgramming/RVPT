@@ -7,11 +7,11 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-class camera
+class Camera
 {
    public:
-    explicit camera(float aspect);
-    ~camera();
+    explicit Camera(float aspect);
+    ~Camera();
 
     void move(float x, float y, float z);
     void rotate(float x, float y);

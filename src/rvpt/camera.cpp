@@ -6,20 +6,20 @@
 #include <iostream>
 #include "camera.h"
 
-camera::camera(float aspect) : fov(90), aspect(aspect)
+Camera::Camera(float aspect) : fov(90), aspect(aspect)
 {
     recalculate_values();
     matrix = glm::mat4();
 }
 
-camera::~camera() = default;
+Camera::~Camera() = default;
 
-void camera::move(float x, float y, float z)
+void Camera::move(float x, float y, float z)
 {
     matrix *= glm::translate(glm::vec3(x, y, z));
 }
 
-void camera::rotate(float x, float y)
+void Camera::rotate(float x, float y)
 {
     matrix /= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
     x_angle += x;
@@ -27,12 +27,12 @@ void camera::rotate(float x, float y)
     matrix *= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
 }
 
-void camera::set_fov(float in_fov)
+void Camera::set_fov(float in_fov)
 {
     fov = in_fov;
 }
 
-void camera::recalculate_values()
+void Camera::recalculate_values()
 {
     float theta = fov * 3.1415f / 180;
     float half_height = tanf(theta / 2);
@@ -45,7 +45,7 @@ void camera::recalculate_values()
     vertical = v * half_height;
 }
 
-std::vector<glm::vec4> camera::get_data()
+std::vector<glm::vec4> Camera::get_data()
 {
     std::vector<glm::vec4> data;
     data.emplace_back(origin, 0);
