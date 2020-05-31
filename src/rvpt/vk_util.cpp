@@ -9,8 +9,6 @@
 #include <unordered_map>
 #include <utility>
 
-namespace VK
-{
 const char* error_str(const VkResult result)
 {
     switch (result)
@@ -46,7 +44,8 @@ const char* error_str(const VkResult result)
             return "UNKNOWN_ERROR";
     }
 }
-
+namespace VK
+{
 template <typename T>
 auto gather_vk_types(std::vector<T> const& values)
 {
@@ -526,14 +525,15 @@ VkPipeline PipelineBuilder::get_pipeline(PipelineHandle const& handle)
 
 PipelineHandle PipelineBuilder::create_graphics_pipeline(
     std::string vert_shader, std::string frag_shader,
-    std::vector<VkDescriptorSetLayout> descriptor_layouts, VkRenderPass render_pass,
-    VkExtent2D extent)
+    std::vector<VkDescriptorSetLayout> descriptor_layouts,
+    std::vector<VkPushConstantRange> push_constants, VkRenderPass render_pass, VkExtent2D extent)
 {
     Pipeline pipeline;
     pipeline.index = get_next_index();
     pipeline.vert_shader = vert_shader;
     pipeline.frag_shader = frag_shader;
     pipeline.descriptor_layouts = descriptor_layouts;
+    pipeline.push_constants = push_constants;
     pipeline.render_pass = render_pass;
     pipeline.extent = extent;
 
@@ -545,6 +545,73 @@ PipelineHandle PipelineBuilder::create_graphics_pipeline(
     ShaderModule vertex_module(device, vertex_code);
     ShaderModule fragment_module(device, fragment_code);
 
+    pipeline.layout = create_pipeline_layout(descriptor_layouts, push_constants);
+
+    pipeline.pipeline = create_immutable_graphics_pipeline(
+        vertex_module, fragment_module, pipeline.layout, render_pass, extent, {}, {});
+
+    pipelines.push_back(pipeline);
+    return {pipeline.index};
+}
+
+PipelineHandle PipelineBuilder::create_compute_pipeline(
+    std::string compute_shader, std::vector<VkDescriptorSetLayout> descriptor_layouts,
+    std::vector<VkPushConstantRange> push_constants)
+{
+    Pipeline pipeline;
+    pipeline.index = get_next_index();
+    pipeline.compute_shader = compute_shader;
+    pipeline.descriptor_layouts = descriptor_layouts;
+    pipeline.push_constants = push_constants;
+
+    auto compute_code = load_spirv(compute_shader);
+    assert(compute_code.size());
+
+    ShaderModule compute_module(device, compute_code);
+
+    VkPipelineShaderStageCreateInfo compute_shader_create_info{
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        nullptr,
+        0,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        compute_module.module.handle,
+        "main"};
+
+    pipeline.layout = create_pipeline_layout(descriptor_layouts, push_constants);
+
+    VkComputePipelineCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    create_info.stage = compute_shader_create_info;
+    create_info.layout = pipeline.layout;
+
+    VK_CHECK_RESULT(
+        vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
+    pipelines.push_back(pipeline);
+    return {pipeline.index};
+}
+
+VkPipelineLayout PipelineBuilder::create_pipeline_layout(
+    std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
+    std::vector<VkPushConstantRange> const& push_constants)
+{
+    VkPipelineLayoutCreateInfo pipeline_layout_info{};
+    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_info.setLayoutCount = static_cast<uint32_t>(descriptor_layouts.size());
+    pipeline_layout_info.pSetLayouts = descriptor_layouts.data();
+    pipeline_layout_info.pushConstantRangeCount = static_cast<uint32_t>(push_constants.size());
+    pipeline_layout_info.pPushConstantRanges = push_constants.data();
+
+    VkPipelineLayout layout;
+    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &layout));
+    return layout;
+}
+
+VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
+    ShaderModule const& vertex_module, ShaderModule const& fragment_module,
+    VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent,
+    std::vector<VkVertexInputBindingDescription> const& binding_desc,
+    std::vector<VkVertexInputAttributeDescription> const& attribute_desc, bool enable_blending)
+{
     VkPipelineShaderStageCreateInfo vertex_shader_create_info{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         nullptr,
@@ -565,8 +632,11 @@ PipelineHandle PipelineBuilder::create_graphics_pipeline(
 
     VkPipelineVertexInputStateCreateInfo vertex_input_info{};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_info.vertexBindingDescriptionCount = 0;
-    vertex_input_info.vertexAttributeDescriptionCount = 0;
+    vertex_input_info.vertexBindingDescriptionCount = static_cast<uint32_t>(binding_desc.size());
+    vertex_input_info.pVertexBindingDescriptions = binding_desc.data();
+    vertex_input_info.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(attribute_desc.size());
+    vertex_input_info.pVertexAttributeDescriptions = attribute_desc.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -611,6 +681,16 @@ PipelineHandle PipelineBuilder::create_graphics_pipeline(
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.blendEnable = VK_FALSE;
+    if (enable_blending)
+    {
+        colorBlendAttachment.blendEnable = VK_TRUE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
 
     VkPipelineColorBlendStateCreateInfo color_blending{};
     color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -630,8 +710,6 @@ PipelineHandle PipelineBuilder::create_graphics_pipeline(
     dynamic_state.dynamicStateCount = 2;
     dynamic_state.pDynamicStates = dynamic_states;
 
-    create_pipeline_layout(pipeline, descriptor_layouts);
-
     VkGraphicsPipelineCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     create_info.stageCount = 2;
@@ -642,50 +720,14 @@ PipelineHandle PipelineBuilder::create_graphics_pipeline(
     create_info.pRasterizationState = &rasterizer;
     create_info.pMultisampleState = &multisampling;
     create_info.pColorBlendState = &color_blending;
-    create_info.layout = pipeline.layout;
+    create_info.layout = pipeline_layout;
     create_info.renderPass = render_pass;
     create_info.subpass = 0;
     create_info.basePipelineHandle = VK_NULL_HANDLE;
 
-    VK_CHECK_RESULT(
-        vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
-
-    pipelines.push_back(pipeline);
-    return {pipeline.index};
-}
-
-PipelineHandle PipelineBuilder::create_compute_pipeline(
-    std::string compute_shader, std::vector<VkDescriptorSetLayout> descriptor_layouts)
-{
-    Pipeline pipeline;
-    pipeline.index = get_next_index();
-    pipeline.compute_shader = compute_shader;
-    pipeline.descriptor_layouts = descriptor_layouts;
-
-    auto compute_code = load_spirv(compute_shader);
-    assert(compute_code.size());
-
-    ShaderModule compute_module(device, compute_code);
-
-    VkPipelineShaderStageCreateInfo compute_shader_create_info{
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        nullptr,
-        0,
-        VK_SHADER_STAGE_COMPUTE_BIT,
-        compute_module.module.handle,
-        "main"};
-
-    create_pipeline_layout(pipeline, descriptor_layouts);
-
-    VkComputePipelineCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    create_info.stage = compute_shader_create_info;
-    create_info.layout = pipeline.layout;
-
-    VK_CHECK_RESULT(
-        vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
-    pipelines.push_back(pipeline);
-    return {pipeline.index};
+    VkPipeline pipeline;
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline));
+    return pipeline;
 }
 
 void PipelineBuilder::recompile_pipelines()
@@ -700,12 +742,13 @@ void PipelineBuilder::recompile_pipelines()
         if (pipeline.compute_shader == "")
         {
             create_graphics_pipeline(pipeline.vert_shader, pipeline.frag_shader,
-                                     pipeline.descriptor_layouts, pipeline.render_pass,
-                                     pipeline.extent);
+                                     pipeline.descriptor_layouts, pipeline.push_constants,
+                                     pipeline.render_pass, pipeline.extent);
         }
         else
         {
-            create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts);
+            create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts,
+                                    pipeline.push_constants);
         }
     }
 }
@@ -743,19 +786,6 @@ std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) c
     memcpy(aligned_code.data(), buffer.data(), buffer.size());
 
     return aligned_code;
-}
-
-void PipelineBuilder::create_pipeline_layout(
-    Pipeline& pipeline, std::vector<VkDescriptorSetLayout> const& descriptor_layouts)
-{
-    VkPipelineLayoutCreateInfo pipeline_layout_info{};
-    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = static_cast<uint32_t>(descriptor_layouts.size());
-    pipeline_layout_info.pSetLayouts = descriptor_layouts.data();
-    pipeline_layout_info.pushConstantRangeCount = 0;
-
-    VK_CHECK_RESULT(
-        vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &pipeline.layout))
 }
 
 // Memory
@@ -847,6 +877,21 @@ void MemoryAllocator::unmap(VkBuffer buffer)
     if (it != std::end(buffer_allocations))
     {
         vkUnmapMemory(device, it->second.memory.handle);
+    }
+}
+
+void MemoryAllocator::flush(VkBuffer buffer)
+{
+    auto it = std::find_if(std::begin(buffer_allocations), std::end(buffer_allocations),
+                           [&](auto const& elem) { return elem.first == buffer; });
+
+    if (it != std::end(buffer_allocations))
+    {
+        VkMappedMemoryRange range[1] = {};
+        range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        range[0].memory = it->second.memory.handle;
+        range[0].size = it->second.size;
+        VK_CHECK_RESULT(vkFlushMappedMemoryRanges(device, 1, range));
     }
 }
 VkMemoryPropertyFlags MemoryAllocator::get_memory_property_flags(MemoryUsage usage)
@@ -1014,7 +1059,7 @@ Buffer::Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usag
     : memory_ptr(&memory),
       buffer(create_buffer(device, size, usage)),
       buffer_allocation(memory.allocate_buffer(buffer.handle, size, memory_usage)),
-      size(size)
+      buf_size(size)
 {
 }
 void Buffer::map()
@@ -1033,8 +1078,16 @@ void Buffer::copy_to(void const* pData, size_t size)
 
     if (mapped_ptr != nullptr) memcpy(mapped_ptr, pData, size);
 }
+void Buffer::copy_bytes(unsigned char* data, size_t size)
+{
+    if (!is_mapped) map();
+    if (mapped_ptr != nullptr) memcpy(mapped_ptr, data, size);
+}
+void Buffer::flush() { memory_ptr->flush(buffer.handle); }
 
-VkDescriptorBufferInfo Buffer::descriptor_info() const { return {buffer.handle, 0, size}; }
+VkDeviceSize Buffer::size() const { return buf_size; }
+
+VkDescriptorBufferInfo Buffer::descriptor_info() const { return {buffer.handle, 0, buf_size}; }
 
 // Image Layout Transition
 

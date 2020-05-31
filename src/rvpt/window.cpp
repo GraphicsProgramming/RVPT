@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+#include <imgui/imgui.h>
+
 Window::Window(Window::Settings settings) : active_settings(settings)
 {
     // Initializing glfw and a window
@@ -26,6 +28,47 @@ Window::Window(Window::Settings settings) : active_settings(settings)
         glfwSetCursorPosCallback(window_ptr, mouse_move_callback);
         glfwSetScrollCallback(window_ptr, scroll_callback);
     }
+
+    // Setup back-end capabilities flags
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |=
+        ImGuiBackendFlags_HasMouseCursors;  // We can honor GetMouseCursor() values (optional)
+    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;  // We can honor io.WantSetMousePos
+                                                          // requests (optional, rarely used)
+    io.BackendPlatformName = "imgui_impl_glfw";
+
+    // Keyboard mapping. ImGui will use those indices to peek into the io.KeysDown[] array.
+    io.KeyMap[ImGuiKey_Tab] = GLFW_KEY_TAB;
+    io.KeyMap[ImGuiKey_LeftArrow] = GLFW_KEY_LEFT;
+    io.KeyMap[ImGuiKey_RightArrow] = GLFW_KEY_RIGHT;
+    io.KeyMap[ImGuiKey_UpArrow] = GLFW_KEY_UP;
+    io.KeyMap[ImGuiKey_DownArrow] = GLFW_KEY_DOWN;
+    io.KeyMap[ImGuiKey_PageUp] = GLFW_KEY_PAGE_UP;
+    io.KeyMap[ImGuiKey_PageDown] = GLFW_KEY_PAGE_DOWN;
+    io.KeyMap[ImGuiKey_Home] = GLFW_KEY_HOME;
+    io.KeyMap[ImGuiKey_End] = GLFW_KEY_END;
+    io.KeyMap[ImGuiKey_Insert] = GLFW_KEY_INSERT;
+    io.KeyMap[ImGuiKey_Delete] = GLFW_KEY_DELETE;
+    io.KeyMap[ImGuiKey_Backspace] = GLFW_KEY_BACKSPACE;
+    io.KeyMap[ImGuiKey_Space] = GLFW_KEY_SPACE;
+    io.KeyMap[ImGuiKey_Enter] = GLFW_KEY_ENTER;
+    io.KeyMap[ImGuiKey_Escape] = GLFW_KEY_ESCAPE;
+    io.KeyMap[ImGuiKey_KeyPadEnter] = GLFW_KEY_KP_ENTER;
+    io.KeyMap[ImGuiKey_A] = GLFW_KEY_A;
+    io.KeyMap[ImGuiKey_C] = GLFW_KEY_C;
+    io.KeyMap[ImGuiKey_V] = GLFW_KEY_V;
+    io.KeyMap[ImGuiKey_X] = GLFW_KEY_X;
+    io.KeyMap[ImGuiKey_Y] = GLFW_KEY_Y;
+    io.KeyMap[ImGuiKey_Z] = GLFW_KEY_Z;
+
+    // Setup display size (every frame to accommodate for window resizing)
+    int w, h;
+    int display_w, display_h;
+    glfwGetWindowSize(window_ptr, &w, &h);
+    glfwGetFramebufferSize(window_ptr, &display_w, &display_h);
+    io.DisplaySize = ImVec2((float)w, (float)h);
+    if (w > 0 && h > 0)
+        io.DisplayFramebufferScale = ImVec2((float)display_w / w, (float)display_h / h);
 }
 
 Window::~Window()
@@ -68,6 +111,20 @@ void Window::key_callback(GLFWwindow* window, int key, int scancode, int action,
         window_ptr->keys_down.erase(key);
     else if (action == GLFW_PRESS)
         window_ptr->keys_down.insert(key);
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (action == GLFW_PRESS) io.KeysDown[key] = true;
+    if (action == GLFW_RELEASE) io.KeysDown[key] = false;
+
+    // Modifiers are not reliable across systems
+    io.KeyCtrl = io.KeysDown[GLFW_KEY_LEFT_CONTROL] || io.KeysDown[GLFW_KEY_RIGHT_CONTROL];
+    io.KeyShift = io.KeysDown[GLFW_KEY_LEFT_SHIFT] || io.KeysDown[GLFW_KEY_RIGHT_SHIFT];
+    io.KeyAlt = io.KeysDown[GLFW_KEY_LEFT_ALT] || io.KeysDown[GLFW_KEY_RIGHT_ALT];
+#ifdef _WIN32
+    io.KeySuper = false;
+#else
+    io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER];
+#endif
 }
 
 void Window::mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
@@ -107,18 +164,28 @@ void Window::mouse_click_callback(GLFWwindow* window, int button, int action, in
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     for (auto& callback : window_ptr->mouse_click_callbacks)
         callback(mouse_button, callback_action);
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (action < GLFW_REPEAT) io.MouseDown[button] = action;
 }
 
 void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     for (auto& callback : window_ptr->mouse_move_callbacks) callback(x, y);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.MousePos = ImVec2((float)x, (float)y);
 }
 
 void Window::scroll_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     for (auto& callback : window_ptr->scroll_callbacks) callback(x, y);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.MouseWheelH += static_cast<float>(x);
+    io.MouseWheel += static_cast<float>(y);
 }
 
 Window::Settings Window::get_settings() { return active_settings; }
