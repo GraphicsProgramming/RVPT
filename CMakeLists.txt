@@ -12,6 +12,15 @@ target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader
 target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json)
 
+if (DEBUG)
+    if (WIN32)
+        target_compile_options(rvpt PUBLIC /fsanitize=address)
+    else()
+        target_compile_options(rvpt PUBLIC -fsanitize=address)
+    endif()
+endif()
+
+
 #compile shaders in assets/shaders
 if(WIN32)
 add_custom_target(compile-shaders ALL
