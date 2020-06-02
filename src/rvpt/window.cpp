@@ -34,6 +34,11 @@ Window::~Window()
     glfwTerminate();
 }
 
+float Window::get_aspect_ratio()
+{
+    return static_cast<float>(active_settings.width) / static_cast<float>(active_settings.height);
+}
+
 void Window::poll_events() { glfwPollEvents(); }
 
 void Window::add_mouse_click_callback(std::function<void(Mouse, Action)> callback)

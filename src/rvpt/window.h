@@ -15,7 +15,7 @@ class Window
 public:
     enum class KeyCode
     {
-        SPACE = 32, // I can't wait to write all of these out
+        SPACE = 32,  // I can't wait to write all of these out
         APOSTROPHE = 39,
         COMMA = 44,
         MINUS = 45,
@@ -30,7 +30,7 @@ public:
         KEY_6 = 54,
         KEY_7 = 55,
         KEY_8 = 56,
-        KEY_9 = 57, // This is starting to get really annoying
+        KEY_9 = 57,  // This is starting to get really annoying
         SEMICOLON = 59,
         EQUAL = 61,
         KEY_A = 65,
@@ -59,12 +59,12 @@ public:
         KEY_X = 88,
         KEY_Y = 89,
         KEY_Z = 90,
-        KEY_LEFT_BRACKET = 91, /* [ */
-        KEY_BACKSLASH = 92, /* \ */
+        KEY_LEFT_BRACKET = 91,  /* [ */
+        KEY_BACKSLASH = 92,     /* \ */
         KEY_RIGHT_BRACKET = 93, /* ] */
-        KEY_GRAVE_ACCENT = 96, /* ` */
-        KEY_WORLD_1 = 161, /* non-US #1 */
-        KEY_WORLD_2 = 162, /* non-US #2 */
+        KEY_GRAVE_ACCENT = 96,  /* ` */
+        KEY_WORLD_1 = 161,      /* non-US #1 */
+        KEY_WORLD_2 = 162,      /* non-US #2 */
         KEY_ESCAPE = 256,
         KEY_ENTER = 257,
         KEY_TAB = 258,
@@ -166,6 +166,7 @@ public:
     explicit Window(Settings settings);
     ~Window();
 
+    float get_aspect_ratio();
     void add_mouse_click_callback(std::function<void(Mouse button, Action action)> callback);
     void add_mouse_move_callback(std::function<void(float x, float y)> callback);
     void add_scroll_callback(std::function<void(float x, float y)> callback);
@@ -182,7 +183,6 @@ public:
 private:
     std::unordered_set<int> keys_down;
 
-    std::vector<std::function<void(int keycode, Action action)>> key_callbacks;
     std::vector<std::function<void(Mouse button, Action action)>> mouse_click_callbacks;
     std::vector<std::function<void(float x, float y)>> mouse_move_callbacks;
     std::vector<std::function<void(float x, float y)>> scroll_callbacks;
