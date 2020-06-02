@@ -10,10 +10,13 @@ struct Ray
     vec3 direction;
 };
 
-struct Camera
+struct Record
 {
-    vec3 origin;
-    vec3 center;
-    vec3 horizontal;
-    vec3 vertical;
+    bool hit;
+    float distance;
+    float reflectiveness;
+    vec3 emission;
+    vec3 albedo;
+    vec3 normal;
+    vec3 intersection;
 };

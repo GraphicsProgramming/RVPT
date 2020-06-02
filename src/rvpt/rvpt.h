@@ -11,9 +11,11 @@
 #include <GLFW/glfw3.h>
 
 #include <VkBootstrap.h>
-#include "window.h"
 
+#include "window.h"
 #include "vk_util.h"
+#include "camera.h"
+#include "timer.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -45,6 +47,15 @@ public:
 
     void reload_shaders();
 
+    Camera scene_camera;
+    Timer time;
+
+    struct RenderSettings
+    {
+        int max_bounces = 8;
+        int aa = 16;
+    } render_settings;
+
 private:
     Window& window_ref;
     std::string source_folder = "";
@@ -52,6 +63,8 @@ private:
     // from a callback
     bool framebuffer_resized = false;
 
+    // Random numbers (generated every frame)
+    std::vector<float> random_numbers;
     struct Context
     {
         VkSurfaceKHR surf{};
@@ -100,7 +113,9 @@ private:
 
     std::optional<RenderingResources> rendering_resources;
     std::vector<VK::Image> per_frame_output_image;
-    std::vector<VK::Buffer> per_frame_uniform_buffer;
+    std::vector<VK::Buffer> per_frame_camera_uniform;
+    std::vector<VK::Buffer> per_frame_random_uniform;
+    std::vector<VK::Buffer> per_frame_settings_uniform;
     std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
     std::vector<VK::Fence> per_frame_raytrace_work_fence;
     std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;
@@ -113,7 +128,6 @@ private:
     void create_framebuffers();
 
     RenderingResources create_rendering_resources();
-    PerFrameDescriptorSets create_per_frame_descriptor_sets();
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();
