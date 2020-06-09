@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 Window::Window(Window::Settings settings) : active_settings(settings)
 {

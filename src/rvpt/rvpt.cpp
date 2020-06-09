@@ -9,7 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <nlohmann/json.hpp>
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio())
 {
