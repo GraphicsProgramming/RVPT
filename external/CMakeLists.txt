@@ -29,8 +29,19 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nlohmann/json
     GIT_TAG        v3.7.3
 )
-
 FetchContent_MakeAvailable(glfw vk_bootstrap glm nlohman_json)
 
-add_library(lib_imgui imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp)
-target_include_directories(lib_imgui PRIVATE imgui)
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui
+    GIT_TAG        v1.76
+)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+  FetchContent_Populate(imgui)
+
+  add_library(lib_imgui ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
+  target_include_directories(lib_imgui PUBLIC ${imgui_SOURCE_DIR})
+
+endif()
+

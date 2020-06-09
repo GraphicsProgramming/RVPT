@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <array>
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 /*
 #version 450 core
