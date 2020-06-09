@@ -7,7 +7,7 @@
 #include <random>
 
 #include <glm/glm.hpp>
-#include <glm/glm/ext.hpp>
+#include <glm/ext.hpp>
 #include <nlohmann/json.hpp>
 #include <imgui/imgui.h>
 
@@ -389,12 +389,13 @@ bool RVPT::swapchain_reinit()
     vkb_swapchain.destroy_image_views(swapchain_image_views);
 
     vkb::SwapchainBuilder swapchain_builder(context.device);
-    auto ret = swapchain_builder.recreate(vkb_swapchain);
+    auto ret = swapchain_builder.set_old_swapchain(vkb_swapchain).build();
     if (!ret)
     {
         std::cerr << "Failed to recreate swapchain:" << ret.error().message() << '\n';
         return false;
     }
+    vkb::destroy_swapchain(vkb_swapchain);
     vkb_swapchain = ret.value();
     bool out_bool = swapchain_get_images();
     create_framebuffers();

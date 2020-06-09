@@ -2,7 +2,8 @@
 // Created by legend on 5/26/20.
 //
 
-#include <glm/glm/ext.hpp>
+#include <glm/ext.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <iostream>
 #include "camera.h"
 
@@ -14,7 +15,7 @@ Camera::Camera(float aspect) : fov(90), aspect(aspect)
 
 Camera::~Camera() = default;
 
-void Camera::move(float x, float y, float z) { matrix *= glm::translate(glm::vec3(x, y, z)); }
+void Camera::move(float x, float y, float z) { glm::translate(matrix, glm::vec3(x, y, z)); }
 
 void Camera::rotate(float x, float y)
 {
