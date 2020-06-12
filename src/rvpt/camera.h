@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
 #include <vector>
+#include <glm/glm.hpp>
 
 class Camera
 {
@@ -17,10 +17,11 @@ public:
     void rotate(float x, float y);
     void set_fov(float fov);
     std::vector<glm::vec4> get_data();
+    void update_imgui();
 
 private:
     void recalculate_values();
-    float fov, aspect, x_angle{}, y_angle{};
-    glm::vec3 origin, center, horizontal, vertical;
-    glm::mat4 matrix;
+    float fov{}, aspect{}, x_angle{}, y_angle{};
+    glm::vec3 origin{}, center{}, horizontal{}, vertical{};
+    glm::mat4 matrix{1.f};
 };

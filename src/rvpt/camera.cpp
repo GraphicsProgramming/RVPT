@@ -1,21 +1,22 @@
 //
 // Created by legend on 5/26/20.
 //
+#include "camera.h"
+
+#include <iostream>
 
 #include <glm/ext.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <iostream>
-#include "camera.h"
+#include <imgui.h>
 
-Camera::Camera(float aspect) : fov(90), aspect(aspect)
-{
-    recalculate_values();
-    matrix = glm::mat4();
-}
+Camera::Camera(float aspect) : fov(90), aspect(aspect) { recalculate_values(); }
 
 Camera::~Camera() = default;
 
-void Camera::move(float x, float y, float z) { glm::translate(matrix, glm::vec3(x, y, z)); }
+void Camera::move(float x, float y, float z)
+{
+    matrix = glm::translate(matrix, glm::vec3(x, y, z));
+}
 
 void Camera::rotate(float x, float y)
 {
@@ -53,4 +54,44 @@ std::vector<glm::vec4> Camera::get_data()
     data.emplace_back(matrix[3]);
 
     return data;
+}
+
+void Camera::update_imgui()
+{
+    static bool is_active = true;
+    ImGui::SetWindowPos({0, 200});
+    ImGui::SetWindowSize({180, 100});
+
+    if (ImGui::Begin("Camera Data", &is_active))
+    {
+        ImGui::SliderFloat("fov", &fov, 1, 179);
+
+        ImGui::DragFloat4("mat4[0]", glm::value_ptr(matrix[0]), 0.05f);
+        ImGui::DragFloat4("mat4[1]", glm::value_ptr(matrix[1]), 0.05f);
+        ImGui::DragFloat4("mat4[2]", glm::value_ptr(matrix[2]), 0.05f);
+        ImGui::DragFloat4("mat4[3]", glm::value_ptr(matrix[3]), 0.05f);
+
+        ImGui::Text("Reset");
+        ImGui::SameLine();
+        if (ImGui::Button("Pos"))
+        {
+            matrix = glm::mat4{1.f};
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Scale"))
+        {
+            matrix[0][0] = 1.f;
+            matrix[1][1] = 1.f;
+            matrix[2][2] = 1.f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Rot"))
+        {
+            matrix[0] = glm::vec4(matrix[0][0], 0.f, 0.f, 0.f);
+            matrix[1] = glm::vec4(0.f, matrix[1][1], 0.f, 0.f);
+            matrix[2] = glm::vec4(0.f, 0.f, matrix[2][2], 0.f);
+        }
+    }
+    ImGui::End();
+    recalculate_values();
 }
