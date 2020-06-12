@@ -8,13 +8,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, ubuntu-20.04]
+        config: [Debug, Release]
 
     steps:
       - uses: actions/checkout@v2
       - name: configure
         run: git submodule update --init && wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add - && sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.2.135-bionic.list http://packages.lunarg.com/vulkan/1.2.135/lunarg-vulkan-1.2.135-bionic.list && sudo apt update && sudo apt-get install -y libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev cmake vulkan-sdk && mkdir build
-      - name: build debug
-        run: cd build && rm -rf * && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .
-      - name: build release
-        run: cd build && rm -rf * && cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
+      - name: build
+        run: cd build && rm -rf * && cmake -DCMAKE_BUILD_TYPE=${{matrix.config}} .. && cmake --build .
