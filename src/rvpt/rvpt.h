@@ -20,6 +20,12 @@
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
+struct Sphere
+{
+    glm::vec3 origin;
+    float radius;
+};
+
 class RVPT
 {
 public:
@@ -67,6 +73,9 @@ private:
 
     // Random numbers (generated every frame)
     std::vector<float> random_numbers;
+
+    std::vector<Sphere> spheres;
+
     struct Context
     {
         VkSurfaceKHR surf{};
@@ -109,20 +118,21 @@ private:
         VK::PipelineHandle raytrace_pipeline;
     };
 
-    struct PerFrameDescriptorSets
+    std::optional<RenderingResources> rendering_resources;
+
+    struct PerFrameData
     {
+        VK::Image output_image;
+        VK::Buffer camera_uniform;
+        VK::Buffer random_uniform;
+        VK::Buffer settings_uniform;
+        VK::Buffer sphere_buffer;
+        VK::CommandBuffer raytrace_command_buffer;
+        VK::Fence raytrace_work_fence;
         VK::DescriptorSet image_descriptor_set;
         VK::DescriptorSet raytracing_descriptor_sets;
     };
-
-    std::optional<RenderingResources> rendering_resources;
-    std::vector<VK::Image> per_frame_output_image;
-    std::vector<VK::Buffer> per_frame_camera_uniform;
-    std::vector<VK::Buffer> per_frame_random_uniform;
-    std::vector<VK::Buffer> per_frame_settings_uniform;
-    std::vector<VK::CommandBuffer> per_frame_raytrace_command_buffer;
-    std::vector<VK::Fence> per_frame_raytrace_work_fence;
-    std::vector<PerFrameDescriptorSets> per_frame_descriptor_sets;
+    std::vector<PerFrameData> per_frame_data;
 
     // helper functions
     bool context_init();
@@ -132,6 +142,7 @@ private:
     void create_framebuffers();
 
     RenderingResources create_rendering_resources();
+    void add_per_frame_data();
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();

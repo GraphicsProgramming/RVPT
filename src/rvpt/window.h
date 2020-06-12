@@ -4,11 +4,12 @@
 
 #pragma once
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <vector>
 #include <functional>
 #include <unordered_set>
+
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 
 class Window
 {

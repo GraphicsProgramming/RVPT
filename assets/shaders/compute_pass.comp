@@ -25,12 +25,15 @@ layout(binding = 3) uniform RenderSettings
 render_settings;
 
 #include "structs.glsl"
+
+layout(std430, binding = 4) buffer Spheres { Sphere spheres[]; };
+
 #include "util.glsl"
 
 // Global Variables //
 ivec2 dim = imageSize(result_image);
 float aspect = float(dim.x) / float(dim.y);
-Sphere[3] spheres;
+// Sphere[3] spheres;
 // End Global Variables //
 
 bool intersect_spheres(Ray ray, inout Record record)
