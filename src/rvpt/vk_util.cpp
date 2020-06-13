@@ -811,11 +811,11 @@ MemoryAllocator::Allocation<VkImage> MemoryAllocator::allocate_image(VkImage ima
     uint32_t memory_type =
         find_memory_type(memory_requirements.memoryTypeBits, get_memory_property_flags(usage));
 
-    auto device_memory = create_device_memory(size, memory_type);
+    auto device_memory = create_device_memory(memory_requirements.size, memory_type);
 
     vkBindImageMemory(device, image, device_memory.handle, 0);
 
-    InternalAllocation alloc{size, std::move(device_memory)};
+    InternalAllocation alloc{memory_requirements.size, std::move(device_memory)};
     image_allocations.emplace_back(image, std::move(alloc));
     return Allocation(this, image);
 }
