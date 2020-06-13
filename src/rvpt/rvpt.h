@@ -4,6 +4,7 @@
 #include <vector>
 #include <optional>
 #include <iostream>
+#include <random>
 
 #include <vulkan/vulkan.h>
 
@@ -70,6 +71,10 @@ private:
 
     // from a callback
     bool framebuffer_resized = false;
+
+    // Random number generators
+    std::mt19937 random_generator;
+    std::uniform_real_distribution<float> distribution;
 
     // Random numbers (generated every frame)
     std::vector<float> random_numbers;

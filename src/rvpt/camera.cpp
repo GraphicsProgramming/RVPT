@@ -59,8 +59,8 @@ std::vector<glm::vec4> Camera::get_data()
 void Camera::update_imgui()
 {
     static bool is_active = true;
-    ImGui::SetWindowPos({0, 200});
-    ImGui::SetWindowSize({180, 100});
+    ImGui::SetNextWindowPos({0, 160});
+    ImGui::SetNextWindowSize({200, 180});
 
     if (ImGui::Begin("Camera Data", &is_active))
     {

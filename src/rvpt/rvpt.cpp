@@ -4,14 +4,17 @@
 
 #include <algorithm>
 #include <fstream>
-#include <random>
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <nlohmann/json.hpp>
 #include <imgui.h>
 
-RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_ratio())
+RVPT::RVPT(Window& window)
+    : window_ref(window),
+      scene_camera(window.get_aspect_ratio()),
+      random_generator(std::random_device{}()),
+      distribution(0.0f, 1.0f)
 {
     std::ifstream input("project_configuration.json");
     nlohmann::json json;
@@ -19,6 +22,16 @@ RVPT::RVPT(Window& window) : window_ref(window), scene_camera(window.get_aspect_
     if (json.contains("project_source_dir"))
     {
         source_folder = json["project_source_dir"];
+    }
+
+    random_numbers.resize(1024);
+
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            spheres.push_back({{2.f * i - 4.f, 1.f, 2.f * j - 4.f}, 1.f});
+        }
     }
 }
 
@@ -46,14 +59,6 @@ bool RVPT::initialize()
 
     create_framebuffers();
 
-    for (int i = 0; i < 4; i++)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            spheres.push_back({{2.f * i - 4.f, 1.f, 2.f * j - 4.f}, 1.f});
-        }
-    }
-
     rendering_resources = create_rendering_resources();
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -61,17 +66,11 @@ bool RVPT::initialize()
         add_per_frame_data();
     }
 
-    random_numbers.resize(1024);
-
     return init;
 }
 bool RVPT::update()
 {
-    // Generate random numbers
-    std::mt19937 generator(std::random_device{}());
-    std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
-
-    for (int i = 0; i < 1024; i++) random_numbers[i] = (distribution(generator));
+    for (auto& r : random_numbers) r = (distribution(random_generator));
     return true;
 }
 
@@ -94,12 +93,12 @@ void RVPT::update_imgui()
 
     // imgui back end can't show 2 windows
     static bool show_stats = true;
-    ImGui::SetWindowPos({0, 0});
-    ImGui::SetWindowSize({160, 100});
+    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowSize({160, 120});
     if (ImGui::Begin("Stats", &show_stats))
     {
-        ImGui::Text("Frame Time %f", time.average_frame_time());
-        ImGui::Text("FPS %f", 1.0 / time.average_frame_time());
+        ImGui::Text("Frame Time %.4f", time.average_frame_time());
+        ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
     }
     ImGui::End();
 
@@ -408,17 +407,24 @@ void RVPT::add_per_frame_data()
 {
     auto output_image = VK::Image(
         vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_TILING_OPTIMAL, 512, 512, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-        VK_IMAGE_LAYOUT_GENERAL, static_cast<VkDeviceSize>(512 * 512 * 4), VK::MemoryUsage::gpu);
+        VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width, window_ref.get_settings().height,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+        static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                  window_ref.get_settings().height * 4),
+        VK::MemoryUsage::gpu);
+
+    auto temp_camera_data = scene_camera.get_data();
     auto camera_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 64,
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                   sizeof(decltype(temp_camera_data)::value_type) * temp_camera_data.size(),
                    VK::MemoryUsage::cpu_to_gpu);
     auto random_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 4096,
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                   sizeof(decltype(random_numbers)::value_type) * random_numbers.size(),
                    VK::MemoryUsage::cpu_to_gpu);
     auto settings_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 8,
-                   VK::MemoryUsage::cpu_to_gpu);
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                   sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
     auto sphere_buffer = VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     sizeof(Sphere) * spheres.size(), VK::MemoryUsage::cpu_to_gpu);
     auto raytrace_command_buffer =
