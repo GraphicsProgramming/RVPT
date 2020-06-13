@@ -255,6 +255,10 @@ ImguiImpl::ImguiImpl(VkDevice device, VK::Queue& graphics_queue,
     write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     write_desc[0].pImageInfo = write_descriptor;
     vkUpdateDescriptorSets(device, 1, write_desc, 0, nullptr);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendRendererName = "imgui_impl_vulkan";
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // allow for large meshes.
 }
 
 void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
@@ -282,9 +286,9 @@ void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
         for (int n = 0; n < draw_data->CmdListsCount; n++)
         {
             const ImDrawList* cmd_list = draw_data->CmdLists[n];
-            vertex_data.insert(vertex_data.begin(), cmd_list->VtxBuffer.begin(),
+            vertex_data.insert(vertex_data.end(), cmd_list->VtxBuffer.begin(),
                                cmd_list->VtxBuffer.end());
-            index_data.insert(index_data.begin(), cmd_list->IdxBuffer.begin(),
+            index_data.insert(index_data.end(), cmd_list->IdxBuffer.begin(),
                               cmd_list->IdxBuffer.end());
         }
 
@@ -383,10 +387,10 @@ void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
 
                     // Apply scissor/clipping rectangle
                     VkRect2D scissor;
-                    scissor.offset.x = (int32_t)(clip_rect.x);
-                    scissor.offset.y = (int32_t)(clip_rect.y);
-                    scissor.extent.width = (uint32_t)(clip_rect.z - clip_rect.x);
-                    scissor.extent.height = (uint32_t)(clip_rect.w - clip_rect.y);
+                    scissor.offset.x = static_cast<int32_t>(clip_rect.x);
+                    scissor.offset.y = static_cast<int32_t>(clip_rect.y);
+                    scissor.extent.width = static_cast<uint32_t>(clip_rect.z - clip_rect.x);
+                    scissor.extent.height = static_cast<uint32_t>(clip_rect.w - clip_rect.y);
                     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
                     // Draw

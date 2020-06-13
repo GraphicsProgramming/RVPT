@@ -13,6 +13,8 @@ void update_camera(Window& window, RVPT& rvpt)
     glm::vec3 movement{};
     double frameDelta = rvpt.time.since_last_frame();
     if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 2;
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT_CONTROL))
+        movement.y += static_cast<float>(3.0 * frameDelta);
     if (window.is_key_down(Window::KeyCode::SPACE))
         movement.y -= static_cast<float>(3.0 * frameDelta);
     if (window.is_key_down(Window::KeyCode::KEY_W))

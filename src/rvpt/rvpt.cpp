@@ -93,14 +93,14 @@ void RVPT::update_imgui()
     io.DeltaTime = static_cast<float>(time.since_last_frame());
 
     // imgui back end can't show 2 windows
-    // static bool show_stats = true;
-    // ImGui::SetWindowPos({0, 0});
-    // ImGui::SetWindowSize({160, 100});
-    // if (ImGui::Begin("Stats", &show_stats))
-    // {
-    //     ImGui::Text("Frame Time %d", time.average_frame_time());
-    // }
-    // ImGui::End();
+    static bool show_stats = true;
+    ImGui::SetWindowPos({0, 0});
+    ImGui::SetWindowSize({160, 100});
+    if (ImGui::Begin("Stats", &show_stats))
+    {
+        ImGui::Text("Frame Time %d", time.average_frame_time());
+    }
+    ImGui::End();
 
     scene_camera.update_imgui();
 }
