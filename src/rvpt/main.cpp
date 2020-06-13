@@ -12,6 +12,7 @@ void update_camera(Window& window, RVPT& rvpt)
 {
     glm::vec3 movement{};
     double frameDelta = rvpt.time.since_last_frame();
+
     if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 2;
     if (window.is_key_down(Window::KeyCode::KEY_LEFT_CONTROL))
         movement.y += static_cast<float>(3.0 * frameDelta);
@@ -25,7 +26,9 @@ void update_camera(Window& window, RVPT& rvpt)
         movement.x -= static_cast<float>(3.0 * frameDelta);
     if (window.is_key_down(Window::KeyCode::KEY_A))
         movement.x += static_cast<float>(3.0 * frameDelta);
+
     rvpt.scene_camera.move(movement.x, movement.y, movement.z);
+
     if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rvpt.scene_camera.rotate(0, 0.03f);
     if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rvpt.scene_camera.rotate(0, -0.03f);
     if (window.is_key_down(Window::KeyCode::KEY_UP)) rvpt.scene_camera.rotate(-0.03f, 0);

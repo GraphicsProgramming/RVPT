@@ -98,7 +98,8 @@ void RVPT::update_imgui()
     ImGui::SetWindowSize({160, 100});
     if (ImGui::Begin("Stats", &show_stats))
     {
-        ImGui::Text("Frame Time %d", time.average_frame_time());
+        ImGui::Text("Frame Time %f", time.average_frame_time());
+        ImGui::Text("FPS %f", 1.0 / time.average_frame_time());
     }
     ImGui::End();
 
