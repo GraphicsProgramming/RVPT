@@ -68,7 +68,7 @@ bool RVPT::initialize()
 bool RVPT::update()
 {
     // Generate random numbers
-    std::mt19937 generator(29472394623U);
+    std::mt19937 generator(std::random_device{}());
     std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
 
     for (int i = 0; i < 1024; i++) random_numbers[i] = (distribution(generator));
