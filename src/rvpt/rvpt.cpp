@@ -24,18 +24,27 @@ RVPT::RVPT(Window& window)
         source_folder = json["project_source_dir"];
     }
 
-    random_numbers.resize(1024);
+    random_numbers.resize(20480);
 
-    for (int i = 0; i < 4; i++)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            spheres.push_back({{2.f * i - 4.f, 1.f, 2.f * j - 4.f}, 1.f});
-        }
-    }
+    glm::vec3 translation(0, 0, -20);
+
+    spheres.emplace_back(glm::vec3(0, 10005, 0) + translation, 10000, 0);
+    spheres.emplace_back(glm::vec3(5, 0, -3) + translation, 3, 1);
+
+    triangles.emplace_back(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+
+    materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.0, .7, .7, 0),
+                           Material::Type::LAMBERT);
 }
 
 RVPT::~RVPT() {}
+
+void RVPT::addRectangle(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, int mat)
+{
+    triangles.emplace_back(a, b, d, mat);
+    triangles.emplace_back(c, a, d, mat);
+}
 
 bool RVPT::initialize()
 {
@@ -71,6 +80,22 @@ bool RVPT::initialize()
 bool RVPT::update()
 {
     for (auto& r : random_numbers) r = (distribution(random_generator));
+
+    per_frame_data[current_frame_index].raytrace_work_fence.wait();
+    per_frame_data[current_frame_index].raytrace_work_fence.reset();
+
+    per_frame_data[current_frame_index].camera_uniform.copy_to(scene_camera.get_data());
+    per_frame_data[current_frame_index].random_buffer.copy_to(random_numbers);
+    per_frame_data[current_frame_index].settings_uniform.copy_to(render_settings);
+
+    float delta = time.since_last_frame();
+
+    // haha sphere go up and down go brrrrrrrr
+    //    spheres[1].origin.y += sin(delta * .1);
+
+    per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
+    per_frame_data[current_frame_index].triangle_buffer.copy_to(triangles);
+    per_frame_data[current_frame_index].material_buffer.copy_to(materials);
     return true;
 }
 
@@ -108,14 +133,6 @@ void RVPT::update_imgui()
 RVPT::draw_return RVPT::draw()
 {
     time.frame_start();
-    per_frame_data[current_frame_index].raytrace_work_fence.wait();
-    per_frame_data[current_frame_index].raytrace_work_fence.reset();
-
-    per_frame_data[current_frame_index].camera_uniform.copy_to(scene_camera.get_data());
-    per_frame_data[current_frame_index].random_uniform.copy_to(random_numbers);
-    per_frame_data[current_frame_index].settings_uniform.copy_to(render_settings);
-
-    per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
 
     record_compute_command_buffer();
 
@@ -385,9 +402,12 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
+        {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+    };
 
     auto raytrace_descriptor_pool =
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
@@ -418,8 +438,8 @@ void RVPT::add_per_frame_data()
         VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                    sizeof(decltype(temp_camera_data)::value_type) * temp_camera_data.size(),
                    VK::MemoryUsage::cpu_to_gpu);
-    auto random_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    auto random_buffer =
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                    sizeof(decltype(random_numbers)::value_type) * random_numbers.size(),
                    VK::MemoryUsage::cpu_to_gpu);
     auto settings_uniform =
@@ -427,6 +447,12 @@ void RVPT::add_per_frame_data()
                    sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
     auto sphere_buffer = VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     sizeof(Sphere) * spheres.size(), VK::MemoryUsage::cpu_to_gpu);
+    auto triangle_buffer =
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                   sizeof(Triangle) * triangles.size(), VK::MemoryUsage::cpu_to_gpu);
+    auto material_buffer =
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                   sizeof(Material) * materials.size(), VK::MemoryUsage::cpu_to_gpu);
     auto raytrace_command_buffer =
         VK::CommandBuffer(vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue);
     auto raytrace_work_fence = VK::Fence(vk_device);
@@ -453,8 +479,8 @@ void RVPT::add_per_frame_data()
                                                    camera_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> random_buffer_descriptor_info = {
-        random_uniform.descriptor_info()};
-    VK::DescriptorUse random_buffer_descriptor_use{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        random_buffer.descriptor_info()};
+    VK::DescriptorUse random_buffer_descriptor_use{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                    random_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> frame_settings_descriptor_info = {
@@ -467,18 +493,31 @@ void RVPT::add_per_frame_data()
     VK::DescriptorUse sphere_buffer_descriptor_use{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                    sphere_buffer_descriptor_info};
 
+    std::vector<VkDescriptorBufferInfo> triangle_buffer_descriptor_info = {
+        triangle_buffer.descriptor_info()};
+    VK::DescriptorUse triangle_buffer_descriptor_use{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                     triangle_buffer_descriptor_info};
+
+    std::vector<VkDescriptorBufferInfo> material_buffer_descriptor_info = {
+        material_buffer.descriptor_info()};
+    VK::DescriptorUse material_buffer_descriptor_use{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                     material_buffer_descriptor_info};
+
     std::vector<VkWriteDescriptorSet> write_descriptors = {
         image_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         camera_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         random_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         frame_settings_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
-        sphere_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)};
+        sphere_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
+        triangle_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
+        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)};
 
     vkUpdateDescriptorSets(vk_device, write_descriptors.size(), write_descriptors.data(), 0,
                            nullptr);
     per_frame_data.push_back(RVPT::PerFrameData{
-        std::move(output_image), std::move(camera_uniform), std::move(random_uniform),
-        std::move(settings_uniform), std::move(sphere_buffer), std::move(raytrace_command_buffer),
+        std::move(output_image), std::move(camera_uniform), std::move(random_buffer),
+        std::move(settings_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
+        std::move(material_buffer), std::move(raytrace_command_buffer),
         std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set});
 }
 

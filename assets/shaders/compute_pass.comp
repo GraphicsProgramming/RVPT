@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_scalar_block_layout : require
 
+#define PI 3.1415
 #define RAY_MIN_DIST 0.01
 
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -15,71 +16,42 @@ layout(binding = 1) uniform Camera
     mat4 matrix;
 }
 cam;
-layout(binding = 2) uniform FloatStorage { float nums[1024]; }
-random;
+layout(binding = 2) buffer Random { float random_source[]; };
 layout(binding = 3) uniform RenderSettings
 {
     int max_bounces;
     int aa;
 }
 render_settings;
+ivec2 dim = imageSize(result_image);
+float aspect = float(dim.x) / float(dim.y);
 
 #include "structs.glsl"
 
 layout(std430, binding = 4) buffer Spheres { Sphere spheres[]; };
+layout(std430, binding = 5) buffer Triangles { Triangle triangles[]; };
+layout(std430, binding = 6) buffer Materials { Material materials[]; };
 
 #include "util.glsl"
-
-// Global Variables //
-ivec2 dim = imageSize(result_image);
-float aspect = float(dim.x) / float(dim.y);
-// Sphere[3] spheres;
-// End Global Variables //
-
-bool intersect_spheres(Ray ray, inout Record record)
-{
-    float lowest = -1;
-    for (int i = 0; i < spheres.length(); i++)
-    {
-        vec3 oc = ray.origin - spheres[i].origin;
-        float b = dot(oc, ray.direction);
-        float c = dot(oc, oc) - spheres[i].radius * spheres[i].radius;
-        float delta = b * b - c;
-
-        if (delta > 0.0f)
-        {
-            delta = sqrt(delta);
-            float t0 = (-b - delta);
-            float t1 = (-b + delta);
-            float distance = min(t0, t1);
-            if (!(t0 < 0 || t1 < 0) && RAY_MIN_DIST < distance && (distance < lowest || lowest < 0))
-            {
-                lowest = distance;
-                record.hit = true;
-                record.distance = distance;
-                record.intersection = ray.origin + ray.direction * distance;
-                record.normal = normalize(record.intersection - spheres[i].origin);
-            }
-        }
-    }
-    return lowest > 0;
-}
+#include "intersection.glsl"
+#include "material.glsl"
 
 bool colour(inout Ray ray, inout Record record)
 {
-    if (intersect_spheres(ray, record))
+    record.distance = -1;
+    bool intersected = intersect_spheres(ray, record);
+    intersected = intersect_triangles(ray, record) || intersected;
+
+    if (intersected)
     {
-        record.albedo = vec3(1);
-        record.emission = vec3(0);
-        record.reflectiveness = 0.3;
-        ray.origin = record.intersection;
-        ray.direction = reflect(ray.direction, record.normal);
+        apply_record(ray, record);
         return true;
     }
     else
     {
         record.albedo = vec3(0);
-        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
+//        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
+        record.emission = vec3(0);
         record.reflectiveness = 0.0;
         return false;
     }
@@ -91,7 +63,7 @@ vec3 trace(in Ray ray)
     vec3 final = vec3(0);
 
     Record record;
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < render_settings.max_bounces; i++)
     {
         if (!colour(ray, record))
         {
@@ -107,12 +79,6 @@ vec3 trace(in Ray ray)
 
 void main()
 {
-    // Setup Scene //
-    spheres[0] = Sphere(vec3(0.0f, 0.0f, -6.0f), 5.0f);
-    spheres[1] = Sphere(vec3(0.0f, 0.0f, 6.0f), 5.0f);
-    spheres[2] = Sphere(vec3(0.0f, 10020.0f, 0.0f), 10000.0f);
-    // End Scene Setup //
-
     vec3 sampled = vec3(0);
 
     for (int i = 0; i < render_settings.aa; i++)
