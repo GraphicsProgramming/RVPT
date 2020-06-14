@@ -18,14 +18,10 @@
 #include "vk_util.h"
 #include "camera.h"
 #include "timer.h"
+#include "geometry.h"
+#include "material.h"
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
-struct Sphere
-{
-    glm::vec3 origin;
-    float radius;
-};
 
 class RVPT
 {
@@ -80,6 +76,8 @@ private:
     std::vector<float> random_numbers;
 
     std::vector<Sphere> spheres;
+    std::vector<Triangle> triangles;
+    std::vector<Material> materials;
 
     struct Context
     {
@@ -129,9 +127,11 @@ private:
     {
         VK::Image output_image;
         VK::Buffer camera_uniform;
-        VK::Buffer random_uniform;
+        VK::Buffer random_buffer;
         VK::Buffer settings_uniform;
         VK::Buffer sphere_buffer;
+        VK::Buffer triangle_buffer;
+        VK::Buffer material_buffer;
         VK::CommandBuffer raytrace_command_buffer;
         VK::Fence raytrace_work_fence;
         VK::DescriptorSet image_descriptor_set;
@@ -148,6 +148,9 @@ private:
 
     RenderingResources create_rendering_resources();
     void add_per_frame_data();
+
+    // Todo remove this(PLEASE REMEMBER)
+    void addRectangle(glm::vec3, glm::vec3, glm::vec3, glm::vec3, int mat);
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();
