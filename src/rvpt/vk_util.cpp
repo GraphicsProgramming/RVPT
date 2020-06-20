@@ -507,90 +507,21 @@ PipelineBuilder::PipelineBuilder(VkDevice device, std::string const& source_fold
 
 void PipelineBuilder::shutdown()
 {
-    for (auto& pipeline : pipelines)
-    {
-        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
-        vkDestroyPipeline(device, pipeline.pipeline, nullptr);
-    }
+    for (auto& pipeline : graphics_pipelines) vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+    for (auto& pipeline : compute_pipelines) vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+    for (auto& layout : layouts) vkDestroyPipelineLayout(device, layout, nullptr);
 }
 
-VkPipelineLayout PipelineBuilder::get_layout(PipelineHandle const& handle)
+VkPipeline PipelineBuilder::get_pipeline(GraphicsPipelineHandle const& handle)
 {
-    return pipelines.at(handle.index).layout;
+    return graphics_pipelines.at(handle.index).pipeline;
 }
-VkPipeline PipelineBuilder::get_pipeline(PipelineHandle const& handle)
+VkPipeline PipelineBuilder::get_pipeline(ComputePipelineHandle const& handle)
 {
-    return pipelines.at(handle.index).pipeline;
+    return compute_pipelines.at(handle.index).pipeline;
 }
 
-PipelineHandle PipelineBuilder::create_graphics_pipeline(
-    std::string vert_shader, std::string frag_shader,
-    std::vector<VkDescriptorSetLayout> descriptor_layouts,
-    std::vector<VkPushConstantRange> push_constants, VkRenderPass render_pass, VkExtent2D extent)
-{
-    Pipeline pipeline;
-    pipeline.index = get_next_index();
-    pipeline.vert_shader = vert_shader;
-    pipeline.frag_shader = frag_shader;
-    pipeline.descriptor_layouts = descriptor_layouts;
-    pipeline.push_constants = push_constants;
-    pipeline.render_pass = render_pass;
-    pipeline.extent = extent;
-
-    auto vertex_code = load_spirv(vert_shader);
-    assert(vertex_code.size());
-    auto fragment_code = load_spirv(frag_shader);
-    assert(fragment_code.size());
-
-    ShaderModule vertex_module(device, vertex_code);
-    ShaderModule fragment_module(device, fragment_code);
-
-    pipeline.layout = create_pipeline_layout(descriptor_layouts, push_constants);
-
-    pipeline.pipeline = create_immutable_graphics_pipeline(
-        vertex_module, fragment_module, pipeline.layout, render_pass, extent, {}, {});
-
-    pipelines.push_back(pipeline);
-    return {pipeline.index};
-}
-
-PipelineHandle PipelineBuilder::create_compute_pipeline(
-    std::string compute_shader, std::vector<VkDescriptorSetLayout> descriptor_layouts,
-    std::vector<VkPushConstantRange> push_constants)
-{
-    Pipeline pipeline;
-    pipeline.index = get_next_index();
-    pipeline.compute_shader = compute_shader;
-    pipeline.descriptor_layouts = descriptor_layouts;
-    pipeline.push_constants = push_constants;
-
-    auto compute_code = load_spirv(compute_shader);
-    assert(compute_code.size());
-
-    ShaderModule compute_module(device, compute_code);
-
-    VkPipelineShaderStageCreateInfo compute_shader_create_info{
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        nullptr,
-        0,
-        VK_SHADER_STAGE_COMPUTE_BIT,
-        compute_module.module.handle,
-        "main"};
-
-    pipeline.layout = create_pipeline_layout(descriptor_layouts, push_constants);
-
-    VkComputePipelineCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    create_info.stage = compute_shader_create_info;
-    create_info.layout = pipeline.layout;
-
-    VK_CHECK_RESULT(
-        vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline.pipeline));
-    pipelines.push_back(pipeline);
-    return {pipeline.index};
-}
-
-VkPipelineLayout PipelineBuilder::create_pipeline_layout(
+VkPipelineLayout PipelineBuilder::create_layout(
     std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
     std::vector<VkPushConstantRange> const& push_constants)
 {
@@ -603,15 +534,47 @@ VkPipelineLayout PipelineBuilder::create_pipeline_layout(
 
     VkPipelineLayout layout;
     VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &layout));
+    layouts.push_back(layout);
     return layout;
 }
 
-VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
-    ShaderModule const& vertex_module, ShaderModule const& fragment_module,
-    VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent,
-    std::vector<VkVertexInputBindingDescription> const& binding_desc,
-    std::vector<VkVertexInputAttributeDescription> const& attribute_desc, bool enable_blending)
+GraphicsPipelineHandle PipelineBuilder::create_pipeline(GraphicsPipelineDetails const& details)
 {
+    uint32_t index = graphics_pipelines.size();
+    graphics_pipelines.push_back(details);
+    graphics_pipelines.back().pipeline = create_immutable_pipeline(details);
+    return {index};
+}
+
+ComputePipelineHandle PipelineBuilder::create_pipeline(ComputePipelineDetails const& details)
+{
+    uint32_t index = compute_pipelines.size();
+    compute_pipelines.push_back(details);
+    compute_pipelines.back().pipeline = create_immutable_pipeline(details);
+    return {index};
+}
+
+VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails const& details)
+
+{
+    std::vector<uint32_t> vertex_code;
+    if (details.spirv_vert_data.size() == 0)
+    {
+        vertex_code = load_spirv(details.vert_shader);
+        assert(vertex_code.size());
+    }
+    std::vector<uint32_t> fragment_code;
+    if (details.spirv_frag_data.size() == 0)
+    {
+        fragment_code = load_spirv(details.frag_shader);
+        assert(fragment_code.size());
+    }
+
+    ShaderModule vertex_module(
+        device, details.spirv_vert_data.size() == 0 ? vertex_code : details.spirv_vert_data);
+    ShaderModule fragment_module(
+        device, details.spirv_frag_data.size() == 0 ? fragment_code : details.spirv_frag_data);
+
     VkPipelineShaderStageCreateInfo vertex_shader_create_info{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         nullptr,
@@ -632,11 +595,12 @@ VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
 
     VkPipelineVertexInputStateCreateInfo vertex_input_info{};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_info.vertexBindingDescriptionCount = static_cast<uint32_t>(binding_desc.size());
-    vertex_input_info.pVertexBindingDescriptions = binding_desc.data();
+    vertex_input_info.vertexBindingDescriptionCount =
+        static_cast<uint32_t>(details.binding_desc.size());
+    vertex_input_info.pVertexBindingDescriptions = details.binding_desc.data();
     vertex_input_info.vertexAttributeDescriptionCount =
-        static_cast<uint32_t>(attribute_desc.size());
-    vertex_input_info.pVertexAttributeDescriptions = attribute_desc.data();
+        static_cast<uint32_t>(details.attribute_desc.size());
+    vertex_input_info.pVertexAttributeDescriptions = details.attribute_desc.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -646,14 +610,14 @@ VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float>(extent.width);  // use dynamic viewport
-    viewport.height = static_cast<float>(extent.height);
+    viewport.width = static_cast<float>(details.extent.width);  // use dynamic viewport
+    viewport.height = static_cast<float>(details.extent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
     scissor.offset = {0, 0};
-    scissor.extent = extent;
+    scissor.extent = details.extent;
 
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -667,9 +631,9 @@ VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.lineWidth = details.line_width;
+    rasterizer.cullMode = details.cull_mode;
+    rasterizer.frontFace = details.front_face;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -681,7 +645,7 @@ VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.blendEnable = VK_FALSE;
-    if (enable_blending)
+    if (details.enable_blending)
     {
         colorBlendAttachment.blendEnable = VK_TRUE;
         colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -720,36 +684,53 @@ VkPipeline PipelineBuilder::create_immutable_graphics_pipeline(
     create_info.pRasterizationState = &rasterizer;
     create_info.pMultisampleState = &multisampling;
     create_info.pColorBlendState = &color_blending;
-    create_info.layout = pipeline_layout;
-    create_info.renderPass = render_pass;
+    create_info.layout = details.pipeline_layout;
+    create_info.renderPass = details.render_pass;
     create_info.subpass = 0;
     create_info.basePipelineHandle = VK_NULL_HANDLE;
 
     VkPipeline pipeline;
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline));
+
     return pipeline;
 }
+VkPipeline PipelineBuilder::create_immutable_pipeline(ComputePipelineDetails const& details)
+{
+    auto compute_code = load_spirv(details.compute_shader);
+    assert(compute_code.size());
 
+    ShaderModule compute_module(device, compute_code);
+
+    VkPipelineShaderStageCreateInfo compute_shader_create_info{
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        nullptr,
+        0,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        compute_module.module.handle,
+        "main"};
+
+    VkComputePipelineCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    create_info.stage = compute_shader_create_info;
+    create_info.layout = details.pipeline_layout;
+
+    VkPipeline pipeline;
+    VK_CHECK_RESULT(vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline));
+    return pipeline;
+}
 void PipelineBuilder::recompile_pipelines()
 {
-    pipeline_index = 0;
-    std::vector<Pipeline> old_pipelines = std::move(pipelines);
-    for (auto& pipeline : old_pipelines)
+    for (auto& details : graphics_pipelines)
     {
-        vkDestroyPipeline(device, pipeline.pipeline, nullptr);
-        vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+        vkDestroyPipeline(device, details.pipeline, nullptr);
 
-        if (pipeline.compute_shader == "")
-        {
-            create_graphics_pipeline(pipeline.vert_shader, pipeline.frag_shader,
-                                     pipeline.descriptor_layouts, pipeline.push_constants,
-                                     pipeline.render_pass, pipeline.extent);
-        }
-        else
-        {
-            create_compute_pipeline(pipeline.compute_shader, pipeline.descriptor_layouts,
-                                    pipeline.push_constants);
-        }
+        details.pipeline = create_immutable_pipeline(details);
+    }
+    for (auto& details : compute_pipelines)
+    {
+        vkDestroyPipeline(device, details.pipeline, nullptr);
+
+        details.pipeline = create_immutable_pipeline(details);
     }
 }
 

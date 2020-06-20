@@ -247,7 +247,42 @@ struct ShaderModule
 
 std::vector<uint32_t> load_spirv(std::string const& filename);
 
-struct PipelineHandle
+struct GraphicsPipelineDetails
+{
+    VkPipeline pipeline;
+    VkPipelineLayout pipeline_layout;
+
+    std::string vert_shader;
+    std::string frag_shader;
+    std::vector<uint32_t> spirv_vert_data;
+    std::vector<uint32_t> spirv_frag_data;
+
+    VkRenderPass render_pass;
+    VkExtent2D extent;
+
+    std::vector<VkVertexInputBindingDescription> binding_desc;
+    std::vector<VkVertexInputAttributeDescription> attribute_desc;
+    bool enable_blending = false;
+    VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
+    float line_width = 1.0f;
+    VkCullModeFlags cull_mode = VK_CULL_MODE_FRONT_BIT;
+    VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+};
+
+struct ComputePipelineDetails
+{
+    VkPipeline pipeline;
+    VkPipelineLayout pipeline_layout;
+
+    std::string compute_shader;
+};
+
+struct GraphicsPipelineHandle
+{
+    uint32_t index;
+};
+
+struct ComputePipelineHandle
 {
     uint32_t index;
 };
@@ -258,26 +293,17 @@ struct PipelineBuilder
     explicit PipelineBuilder(VkDevice device, std::string const& source_folder);
     void shutdown();
 
-    VkPipelineLayout get_layout(PipelineHandle const& handle);
-    VkPipeline get_pipeline(PipelineHandle const& handle);
+    VkPipeline get_pipeline(GraphicsPipelineHandle const& handle);
+    VkPipeline get_pipeline(ComputePipelineHandle const& handle);
 
-    PipelineHandle create_graphics_pipeline(std::string vert_shader, std::string frag_shader,
-                                            std::vector<VkDescriptorSetLayout> descriptor_layouts,
-                                            std::vector<VkPushConstantRange> push_constants,
-                                            VkRenderPass render_pass, VkExtent2D extent);
-    PipelineHandle create_compute_pipeline(std::string compute_shader,
-                                           std::vector<VkDescriptorSetLayout> descriptor_layouts,
-                                           std::vector<VkPushConstantRange> push_constants);
+    VkPipelineLayout create_layout(std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
+                                   std::vector<VkPushConstantRange> const& push_constants);
 
-    VkPipelineLayout create_pipeline_layout(
-        std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
-        std::vector<VkPushConstantRange> const& push_constants);
-    VkPipeline create_immutable_graphics_pipeline(
-        ShaderModule const& vertex_module, ShaderModule const& fragment_module,
-        VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent,
-        std::vector<VkVertexInputBindingDescription> const& binding_desc,
-        std::vector<VkVertexInputAttributeDescription> const& attribute_desc,
-        bool enable_blending = false);
+    GraphicsPipelineHandle create_pipeline(GraphicsPipelineDetails const& details);
+    ComputePipelineHandle create_pipeline(ComputePipelineDetails const& details);
+
+    VkPipeline create_immutable_pipeline(GraphicsPipelineDetails const& details);
+    VkPipeline create_immutable_pipeline(ComputePipelineDetails const& details);
 
     void recompile_pipelines();
 
@@ -286,22 +312,9 @@ private:
     VkPipelineCache cache = nullptr;
     std::string source_folder = "";
 
-    struct Pipeline
-    {
-        uint32_t index;
-        VkPipelineLayout layout = VK_NULL_HANDLE;
-        VkPipeline pipeline = VK_NULL_HANDLE;
-        std::string vert_shader, frag_shader, compute_shader;
-        std::vector<VkDescriptorSetLayout> descriptor_layouts;
-        std::vector<VkPushConstantRange> push_constants;
-        VkRenderPass render_pass;
-        VkExtent2D extent;
-    };
-    uint32_t pipeline_index = 0;
-
-    std::vector<Pipeline> pipelines;
-
-    uint32_t get_next_index() { return pipeline_index++; }
+    std::vector<VkPipelineLayout> layouts;
+    std::vector<GraphicsPipelineDetails> graphics_pipelines;
+    std::vector<ComputePipelineDetails> compute_pipelines;
 
     std::vector<uint32_t> load_spirv(std::string const& filename) const;
 };
