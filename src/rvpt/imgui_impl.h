@@ -18,7 +18,7 @@ private:
     VK::Image font_image;
     VK::DescriptorPool pool;
     VK::DescriptorSet descriptor_set;
-    VK::HandleWrapper<VkPipelineLayout, PFN_vkDestroyPipelineLayout> pipeline_layout;
+    VkPipelineLayout pipeline_layout;
     VK::HandleWrapper<VkPipeline, PFN_vkDestroyPipeline> pipeline;
 
     std::vector<VK::Buffer> vertex_buffers;

@@ -117,8 +117,10 @@ private:
 
         VK::DescriptorPool raytrace_descriptor_pool;
 
-        VK::PipelineHandle fullscreen_triangle_pipeline;
-        VK::PipelineHandle raytrace_pipeline;
+        VkPipelineLayout fullscreen_triangle_pipeline_layout;
+        VK::GraphicsPipelineHandle fullscreen_triangle_pipeline;
+        VkPipelineLayout raytrace_pipeline_layout;
+        VK::ComputePipelineHandle raytrace_pipeline;
     };
 
     std::optional<RenderingResources> rendering_resources;

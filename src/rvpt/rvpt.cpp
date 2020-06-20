@@ -412,15 +412,33 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     auto raytrace_descriptor_pool =
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
 
-    auto fullscreen_triangle_pipeline = pipeline_builder.create_graphics_pipeline(
-        "fullscreen_tri.vert.spv", "tex_sample.frag.spv", {image_pool.layout()}, {},
-        fullscreen_tri_render_pass, vkb_swapchain.extent);
+    auto fullscreen_triangle_pipeline_layout =
+        pipeline_builder.create_layout({image_pool.layout()}, {});
 
-    auto raytrace_pipeline = pipeline_builder.create_compute_pipeline(
-        "compute_pass.comp.spv", {raytrace_descriptor_pool.layout()}, {});
+    VK::GraphicsPipelineDetails fullscreen_details;
+    fullscreen_details.pipeline_layout = fullscreen_triangle_pipeline_layout;
+    fullscreen_details.vert_shader = "fullscreen_tri.vert.spv";
+    fullscreen_details.frag_shader = "tex_sample.frag.spv";
+    fullscreen_details.render_pass = fullscreen_tri_render_pass;
+    fullscreen_details.extent = vkb_swapchain.extent;
 
-    return RVPT::RenderingResources{std::move(image_pool), std::move(raytrace_descriptor_pool),
-                                    fullscreen_triangle_pipeline, raytrace_pipeline};
+    auto fullscreen_triangle_pipeline = pipeline_builder.create_pipeline(fullscreen_details);
+
+    auto raytrace_pipeline_layout =
+        pipeline_builder.create_layout({raytrace_descriptor_pool.layout()}, {});
+
+    VK::ComputePipelineDetails raytrace_details;
+    raytrace_details.pipeline_layout = raytrace_pipeline_layout;
+    raytrace_details.compute_shader = "compute_pass.comp.spv";
+
+    auto raytrace_pipeline = pipeline_builder.create_pipeline(raytrace_details);
+
+    return RVPT::RenderingResources{std::move(image_pool),
+                                    std::move(raytrace_descriptor_pool),
+                                    fullscreen_triangle_pipeline_layout,
+                                    fullscreen_triangle_pipeline,
+                                    raytrace_pipeline_layout,
+                                    raytrace_pipeline};
 }
 
 void RVPT::add_per_frame_data()
@@ -570,10 +588,10 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
     vkCmdBindPipeline(
         cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
         pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline));
-    vkCmdBindDescriptorSets(
-        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline_builder.get_layout(rendering_resources->fullscreen_triangle_pipeline), 0, 1,
-        &per_frame_data[current_frame_index].image_descriptor_set.set, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            rendering_resources->fullscreen_triangle_pipeline_layout, 0, 1,
+                            &per_frame_data[current_frame_index].image_descriptor_set.set, 0,
+                            nullptr);
     vkCmdDraw(cmd_buf, 3, 1, 0, 0);
 
     imgui_impl->draw(cmd_buf, current_frame_index);
@@ -589,10 +607,9 @@ void RVPT::record_compute_command_buffer()
     VkCommandBuffer cmd_buf = command_buffer.get();
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipeline_builder.get_pipeline(rendering_resources->raytrace_pipeline));
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            pipeline_builder.get_layout(rendering_resources->raytrace_pipeline), 0,
-                            1, &per_frame_data[current_frame_index].raytracing_descriptor_sets.set,
-                            0, 0);
+    vkCmdBindDescriptorSets(
+        cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, rendering_resources->raytrace_pipeline_layout, 0,
+        1, &per_frame_data[current_frame_index].raytracing_descriptor_sets.set, 0, 0);
 
     vkCmdDispatch(cmd_buf, per_frame_data[current_frame_index].output_image.width / 16,
                   per_frame_data[current_frame_index].output_image.height / 16, 1);

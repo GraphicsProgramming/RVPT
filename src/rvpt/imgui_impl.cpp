@@ -183,9 +183,7 @@ auto create_pipeline_layout(VkDevice device, VK::PipelineBuilder& pipeline_build
     std::vector<VkDescriptorSetLayout> layouts = {layout};
     std::vector<VkPushConstantRange> push_constants = {
         {VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 4}};
-    return VK::HandleWrapper<VkPipelineLayout, PFN_vkDestroyPipelineLayout>(
-        device, pipeline_builder.create_pipeline_layout(layouts, push_constants),
-        vkDestroyPipelineLayout);
+    return pipeline_builder.create_layout(layouts, push_constants);
 }
 
 auto create_vert_shader(VkDevice device)
@@ -194,7 +192,7 @@ auto create_vert_shader(VkDevice device)
     vert_code.resize(324);  // length of glsl_shader_vert_spv
     for (int i = 0; i < 324; i++) vert_code[i] = glsl_shader_vert_spv[i];
 
-    return VK::ShaderModule(device, vert_code);
+    return vert_code;
 }
 
 auto create_frag_shader(VkDevice device)
@@ -203,7 +201,7 @@ auto create_frag_shader(VkDevice device)
     frag_code.resize(193);  // length of glsl_shader_frag_spv
     for (int i = 0; i < 193; i++) frag_code[i] = glsl_shader_frag_spv[i];
 
-    return VK::ShaderModule(device, frag_code);
+    return device, frag_code;
 }
 
 auto create_pipeline(VkDevice device, VK::PipelineBuilder& pipeline_builder,
@@ -220,8 +218,16 @@ auto create_pipeline(VkDevice device, VK::PipelineBuilder& pipeline_builder,
         {1, binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT, IM_OFFSETOF(ImDrawVert, uv)},
         {2, binding_desc[0].binding, VK_FORMAT_R8G8B8A8_UNORM, IM_OFFSETOF(ImDrawVert, col)}};
 
-    auto pipeline = pipeline_builder.create_immutable_graphics_pipeline(
-        vert, frag, layout, render_pass, extent, binding_desc, attribute_desc, true);
+    VK::GraphicsPipelineDetails pipe_details;
+    pipe_details.pipeline_layout = layout;
+    pipe_details.spirv_vert_data = vert;
+    pipe_details.spirv_frag_data = frag;
+    pipe_details.binding_desc = binding_desc;
+    pipe_details.attribute_desc = attribute_desc;
+    pipe_details.enable_blending = true;
+    pipe_details.render_pass = render_pass;
+    pipe_details.extent = extent;
+    auto pipeline = pipeline_builder.create_immutable_pipeline(pipe_details);
 
     return VK::HandleWrapper<VkPipeline, PFN_vkDestroyPipeline>(device, pipeline,
                                                                 vkDestroyPipeline);
@@ -236,8 +242,7 @@ ImguiImpl::ImguiImpl(VkDevice device, VK::Queue& graphics_queue,
       pool(create_descriptor_pool(device, font_image.sampler.handle)),
       descriptor_set(pool.allocate()),
       pipeline_layout(create_pipeline_layout(device, pipeline_builder, pool.layout())),
-      pipeline(
-          create_pipeline(device, pipeline_builder, pipeline_layout.handle, render_pass, extent))
+      pipeline(create_pipeline(device, pipeline_builder, pipeline_layout, render_pass, extent))
 {
     for (uint32_t i = 0; i < max_frames_in_flight; i++)
     {
@@ -313,8 +318,8 @@ void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
 
     // Bind pipeline and descriptor sets:
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout.handle,
-                            0, 1, &descriptor_set.set, 0, NULL);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
+                            &descriptor_set.set, 0, NULL);
 
     if (draw_data->TotalVtxCount > 0)
     {
@@ -337,9 +342,9 @@ void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
     std::array<float, 2> scale = {2.0f / draw_data->DisplaySize.x, 2.0f / draw_data->DisplaySize.y};
     std::array<float, 2> translate = {-1.0f - draw_data->DisplayPos.x * scale[0],
                                       -1.0f - draw_data->DisplayPos.y * scale[1]};
-    vkCmdPushConstants(command_buffer, pipeline_layout.handle, VK_SHADER_STAGE_VERTEX_BIT, 0, 8,
+    vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, 8,
                        scale.data());
-    vkCmdPushConstants(command_buffer, pipeline_layout.handle, VK_SHADER_STAGE_VERTEX_BIT, 8, 8,
+    vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 8, 8,
                        translate.data());
 
     // Will project scissor/clipping rectangles into framebuffer space
