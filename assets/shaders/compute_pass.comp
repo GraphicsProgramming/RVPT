@@ -7,8 +7,8 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(binding = 0, rgba8) uniform writeonly image2D result_image;
-layout(binding = 7, rgba8) uniform image2D temporal_image;
-layout(binding = 1) uniform Camera
+layout(binding = 1, rgba8) uniform image2D temporal_image;
+layout(binding = 2) uniform Camera
 {
     vec3 origin;
     vec3 center;
@@ -17,8 +17,8 @@ layout(binding = 1) uniform Camera
     mat4 matrix;
 }
 cam;
-layout(binding = 2) buffer Random { float random_source[]; };
-layout(binding = 3) uniform RenderSettings
+layout(binding = 3) buffer Random { float random_source[]; };
+layout(binding = 4) uniform RenderSettings
 {
     int max_bounces;
     int aa;
@@ -30,9 +30,9 @@ float aspect = float(dim.x) / float(dim.y);
 
 #include "structs.glsl"
 
-layout(std430, binding = 4) buffer Spheres { Sphere spheres[]; };
-layout(std430, binding = 5) buffer Triangles { Triangle triangles[]; };
-layout(std430, binding = 6) buffer Materials { Material materials[]; };
+layout(std430, binding = 5) buffer Spheres { Sphere spheres[]; };
+layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
+layout(std430, binding = 7) buffer Materials { Material materials[]; };
 
 #include "util.glsl"
 #include "intersection.glsl"
