@@ -58,6 +58,8 @@ int main()
         window.poll_events();
         if (window.is_key_down(Window::KeyCode::KEY_ESCAPE)) window.set_close();
         if (window.is_key_down(Window::KeyCode::KEY_R)) rvpt.reload_shaders();
+        if (window.is_key_down(Window::KeyCode::KEY_V)) rvpt.toggle_debug();
+
         update_camera(window, rvpt);
         ImGui::NewFrame();
         rvpt.update_imgui();

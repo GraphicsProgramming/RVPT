@@ -51,6 +51,8 @@ public:
     void shutdown();
 
     void reload_shaders();
+    void toggle_debug();
+    void toggle_wireframe_debug();
 
     Camera scene_camera;
     Timer time;
@@ -68,6 +70,10 @@ private:
 
     // from a callback
     bool framebuffer_resized = false;
+
+    // enable debug overlay
+    bool debug_overlay_enabled = false;
+    bool debug_wireframe_mode = false;
 
     // Random number generators
     std::mt19937 random_generator;
@@ -117,13 +123,17 @@ private:
     struct RenderingResources
     {
         VK::DescriptorPool image_pool;
-
         VK::DescriptorPool raytrace_descriptor_pool;
+        VK::DescriptorPool debug_descriptor_pool;
 
         VkPipelineLayout fullscreen_triangle_pipeline_layout;
         VK::GraphicsPipelineHandle fullscreen_triangle_pipeline;
         VkPipelineLayout raytrace_pipeline_layout;
         VK::ComputePipelineHandle raytrace_pipeline;
+
+        VkPipelineLayout debug_pipeline_layout;
+        VK::GraphicsPipelineHandle debug_opaque_pipeline;
+        VK::GraphicsPipelineHandle debug_wireframe_pipeline;
     };
 
     std::optional<RenderingResources> rendering_resources;
@@ -142,6 +152,10 @@ private:
         VK::Fence raytrace_work_fence;
         VK::DescriptorSet image_descriptor_set;
         VK::DescriptorSet raytracing_descriptor_sets;
+
+        VK::Buffer debug_camera_uniform;
+        VK::Buffer debug_vertex_buffer;
+        VK::DescriptorSet debug_descriptor_sets;
     };
     std::vector<PerFrameData> per_frame_data;
 

@@ -480,6 +480,8 @@ private:
     void copy_to(void const* pData, size_t size);
 };
 
+void bind_vertex_buffer(VkCommandBuffer command_buffer, Buffer const& buffer);
+
 void set_image_layout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_image_layout,
                       VkImageLayout new_image_layout, VkImageSubresourceRange subresource_range,
                       VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
