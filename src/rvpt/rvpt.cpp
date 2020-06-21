@@ -408,22 +408,21 @@ void RVPT::create_framebuffers()
 RVPT::RenderingResources RVPT::create_rendering_resources()
 {
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-        {7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
     };
 
     auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2);
-
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
     };
+
 
     auto raytrace_descriptor_pool =
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
@@ -496,57 +495,54 @@ void RVPT::add_per_frame_data()
     vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
     std::vector<VkDescriptorImageInfo> temporal_image_descriptor_info = {temporal_storage_image.descriptor_info()};
-    VK::DescriptorUse temporal_image_descriptor_use{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                    temporal_image_descriptor_info};
 
-    auto temporal_image_descriptor = temporal_image_descriptor_use.get_write_descriptor_set(temporal_image_descriptor_set.set);
-    vkUpdateDescriptorSets(vk_device, 1, &temporal_image_descriptor, 0, nullptr);
 
     VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                            image_descriptor_info};
 
-    VK::DescriptorUse temporal_descriptor_use{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+    VK::DescriptorUse temporal_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                             temporal_image_descriptor_info};
+    auto temporal_image_descriptor = temporal_descriptor_use.get_write_descriptor_set(temporal_image_descriptor_set.set);
 
     std::vector<VkDescriptorBufferInfo> camera_buffer_descriptor_info = {
         camera_uniform.descriptor_info()};
-    VK::DescriptorUse camera_buffer_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    VK::DescriptorUse camera_buffer_descriptor_use{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                                    camera_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> random_buffer_descriptor_info = {
         random_buffer.descriptor_info()};
-    VK::DescriptorUse random_buffer_descriptor_use{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    VK::DescriptorUse random_buffer_descriptor_use{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                    random_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> frame_settings_descriptor_info = {
         settings_uniform.descriptor_info()};
-    VK::DescriptorUse frame_settings_descriptor_use{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    VK::DescriptorUse frame_settings_descriptor_use{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                                     frame_settings_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> sphere_buffer_descriptor_info = {
         sphere_buffer.descriptor_info()};
-    VK::DescriptorUse sphere_buffer_descriptor_use{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    VK::DescriptorUse sphere_buffer_descriptor_use{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                    sphere_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> triangle_buffer_descriptor_info = {
         triangle_buffer.descriptor_info()};
-    VK::DescriptorUse triangle_buffer_descriptor_use{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    VK::DescriptorUse triangle_buffer_descriptor_use{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                      triangle_buffer_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> material_buffer_descriptor_info = {
         material_buffer.descriptor_info()};
-    VK::DescriptorUse material_buffer_descriptor_use{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    VK::DescriptorUse material_buffer_descriptor_use{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                      material_buffer_descriptor_info};
 
     std::vector<VkWriteDescriptorSet> write_descriptors = {
         image_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
+        temporal_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         camera_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         random_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         frame_settings_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         sphere_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         triangle_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
-        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
-        temporal_image_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)
+        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)
     };
 
     vkUpdateDescriptorSets(vk_device, write_descriptors.size(), write_descriptors.data(), 0,
