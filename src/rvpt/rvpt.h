@@ -59,6 +59,7 @@ public:
     {
         int max_bounces = 8;
         int aa = 16;
+        uint current_frame = 1;
     } render_settings;
 
 private:
@@ -78,6 +79,8 @@ private:
     std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
     std::vector<Material> materials;
+
+    glm::mat4 last_camera_mat;
 
     struct Context
     {
@@ -128,6 +131,7 @@ private:
     struct PerFrameData
     {
         VK::Image output_image;
+        VK::Image temporal_storage_image;
         VK::Buffer camera_uniform;
         VK::Buffer random_buffer;
         VK::Buffer settings_uniform;

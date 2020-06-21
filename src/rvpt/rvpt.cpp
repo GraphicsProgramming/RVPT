@@ -79,6 +79,17 @@ bool RVPT::initialize()
 }
 bool RVPT::update()
 {
+    bool moved = last_camera_mat != scene_camera.matrix;
+    if(moved)
+    {
+        render_settings.current_frame = 0;
+        last_camera_mat = scene_camera.matrix;
+    }
+    else
+    {
+        render_settings.current_frame++;
+    }
+
     for (auto& r : random_numbers) r = (distribution(random_generator));
 
     per_frame_data[current_frame_index].raytrace_work_fence.wait();
@@ -124,6 +135,8 @@ void RVPT::update_imgui()
     {
         ImGui::Text("Frame Time %.4f", time.average_frame_time());
         ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
+        ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
+        ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
     }
     ImGui::End();
 
@@ -395,9 +408,11 @@ void RVPT::create_framebuffers()
 RVPT::RenderingResources RVPT::create_rendering_resources()
 {
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+    };
 
-    auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT);
+    auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2);
 
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
@@ -407,6 +422,7 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
     };
 
     auto raytrace_descriptor_pool =
@@ -451,6 +467,14 @@ void RVPT::add_per_frame_data()
                                   window_ref.get_settings().height * 4),
         VK::MemoryUsage::gpu);
 
+    auto temporal_storage_image = VK::Image(
+        vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width, window_ref.get_settings().height,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+        static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                  window_ref.get_settings().height * 4),
+        VK::MemoryUsage::gpu);
+
     auto temp_camera_data = scene_camera.get_data();
     auto camera_uniform =
         VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -477,6 +501,7 @@ void RVPT::add_per_frame_data()
 
     // descriptor sets
     auto image_descriptor_set = VK::DescriptorSet(rendering_resources->image_pool.allocate());
+    auto temporal_image_descriptor_set = VK::DescriptorSet(rendering_resources->image_pool.allocate());
     auto raytracing_descriptor_set =
         VK::DescriptorSet(rendering_resources->raytrace_descriptor_pool.allocate());
 
@@ -488,8 +513,18 @@ void RVPT::add_per_frame_data()
     auto write_descriptor = descriptor_use.get_write_descriptor_set(image_descriptor_set.set);
     vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
+    std::vector<VkDescriptorImageInfo> temporal_image_descriptor_info = {temporal_storage_image.descriptor_info()};
+    VK::DescriptorUse temporal_image_descriptor_use{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                    temporal_image_descriptor_info};
+
+    auto temporal_image_descriptor = temporal_image_descriptor_use.get_write_descriptor_set(temporal_image_descriptor_set.set);
+    vkUpdateDescriptorSets(vk_device, 1, &temporal_image_descriptor, 0, nullptr);
+
     VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                            image_descriptor_info};
+
+    VK::DescriptorUse temporal_descriptor_use{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                            temporal_image_descriptor_info};
 
     std::vector<VkDescriptorBufferInfo> camera_buffer_descriptor_info = {
         camera_uniform.descriptor_info()};
@@ -528,12 +563,14 @@ void RVPT::add_per_frame_data()
         frame_settings_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         sphere_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         triangle_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
-        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)};
+        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
+        temporal_image_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)
+    };
 
     vkUpdateDescriptorSets(vk_device, write_descriptors.size(), write_descriptors.data(), 0,
                            nullptr);
     per_frame_data.push_back(RVPT::PerFrameData{
-        std::move(output_image), std::move(camera_uniform), std::move(random_buffer),
+        std::move(output_image), std::move(temporal_storage_image), std::move(camera_uniform), std::move(random_buffer),
         std::move(settings_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
         std::move(material_buffer), std::move(raytrace_command_buffer),
         std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set});
@@ -605,6 +642,20 @@ void RVPT::record_compute_command_buffer()
     auto& command_buffer = per_frame_data[current_frame_index].raytrace_command_buffer;
     command_buffer.begin();
     VkCommandBuffer cmd_buf = command_buffer.get();
+
+    VkImageMemoryBarrier imageMemoryBarrier = {};
+    imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageMemoryBarrier.image = per_frame_data[current_frame_index].temporal_storage_image.image.handle;
+    imageMemoryBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+    imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK::FLAGS_NONE, 0, nullptr, 0,
+                         nullptr, 1, &imageMemoryBarrier);
+
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipeline_builder.get_pipeline(rendering_resources->raytrace_pipeline));
     vkCmdBindDescriptorSets(
