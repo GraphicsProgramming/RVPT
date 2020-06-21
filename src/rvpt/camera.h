@@ -18,10 +18,9 @@ public:
     void set_fov(float fov);
     std::vector<glm::vec4> get_data();
     void update_imgui();
-
+    glm::mat4 matrix{1.f};
 private:
     void recalculate_values();
     float fov{}, aspect{}, x_angle{}, y_angle{};
     glm::vec3 origin{}, center{}, horizontal{}, vertical{};
-    glm::mat4 matrix{1.f};
 };
