@@ -61,7 +61,7 @@ public:
     {
         int max_bounces = 8;
         int aa = 16;
-        uint current_frame = 1;
+        uint32_t current_frame = 1;
     } render_settings;
 
 private:

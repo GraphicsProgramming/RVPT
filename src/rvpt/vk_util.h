@@ -223,9 +223,13 @@ public:
 
     VkDescriptorSetLayout layout();
 
+    void update_descriptor_sets(DescriptorSet const& set,
+                                std::vector<DescriptorUseVector> const& uses);
+
 private:
     HandleWrapper<VkDescriptorSetLayout, PFN_vkDestroyDescriptorSetLayout> vk_layout;
     HandleWrapper<VkDescriptorPool, PFN_vkDestroyDescriptorPool> pool;
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
     uint32_t max_sets = 0;
     uint32_t current_sets = 0;
 };

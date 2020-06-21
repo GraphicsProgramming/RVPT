@@ -379,6 +379,7 @@ DescriptorPool::DescriptorPool(VkDevice device,
                                uint32_t count)
     : vk_layout(create_descriptor_set_layout(device, bindings)),
       pool(create_descriptor_pool(device, bindings, count)),
+      bindings(bindings),
       max_sets(count)
 {
 }
@@ -404,6 +405,27 @@ void DescriptorPool::free(DescriptorSet set)
 }
 
 VkDescriptorSetLayout DescriptorPool::layout() { return vk_layout.handle; }
+
+void DescriptorPool::update_descriptor_sets(DescriptorSet const& set,
+                                            std::vector<DescriptorUseVector> const& uses)
+{
+    assert(uses.size() == bindings.size() && "Must use the correct number of descriptors");
+
+    std::vector<DescriptorUse> descriptor_uses;
+    for (size_t i = 0; i < bindings.size(); i++)
+    {
+        descriptor_uses.emplace_back(bindings[i].binding, bindings[i].descriptorCount,
+                                     bindings[i].descriptorType, uses[i]);
+    }
+    std::vector<VkWriteDescriptorSet> write_descriptors;
+    for (auto& use : descriptor_uses)
+    {
+        write_descriptors.push_back(use.get_write_descriptor_set(set.set));
+    }
+
+    vkUpdateDescriptorSets(pool.device, static_cast<uint32_t>(write_descriptors.size()),
+                           write_descriptors.data(), 0, nullptr);
+}
 
 // Render Pass
 
