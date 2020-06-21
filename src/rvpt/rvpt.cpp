@@ -10,6 +10,12 @@
 #include <nlohmann/json.hpp>
 #include <imgui.h>
 
+struct DebugVertex
+{
+    glm::vec3 pos;
+    glm::vec3 norm;
+};
+
 RVPT::RVPT(Window& window)
     : window_ref(window),
       scene_camera(window.get_aspect_ratio()),
@@ -28,13 +34,15 @@ RVPT::RVPT(Window& window)
 
     glm::vec3 translation(0, 0, -20);
 
-    spheres.emplace_back(glm::vec3(0, 10005, 0) + translation, 10000, 0);
-    spheres.emplace_back(glm::vec3(5, 0, -3) + translation, 3, 1);
+    spheres.emplace_back(glm::vec3(0, 10005, 0) + translation, 10000.f, 0);
+    spheres.emplace_back(glm::vec3(5, 0, -3) + translation, 3.f, 1);
 
-    triangles.emplace_back(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+    triangles.emplace_back(glm::vec3(-3, 0.5, -3), glm::vec3(3, 0.5, -3), glm::vec3(-3, 0.5, 3), 2);
 
     materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
     materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.0, .7, .7, 0),
+                           Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.5, 0.5, 0.5, 0), glm::vec4(0, .1, .1, .1),
                            Material::Type::LAMBERT);
 }
 
@@ -80,7 +88,7 @@ bool RVPT::initialize()
 bool RVPT::update()
 {
     bool moved = last_camera_mat != scene_camera.matrix;
-    if(moved)
+    if (moved)
     {
         render_settings.current_frame = 0;
         last_camera_mat = scene_camera.matrix;
@@ -99,7 +107,7 @@ bool RVPT::update()
     per_frame_data[current_frame_index].random_buffer.copy_to(random_numbers);
     per_frame_data[current_frame_index].settings_uniform.copy_to(render_settings);
 
-    float delta = time.since_last_frame();
+    float delta = static_cast<float>(time.since_last_frame());
 
     // haha sphere go up and down go brrrrrrrr
     //    spheres[1].origin.y += sin(delta * .1);
@@ -107,6 +115,30 @@ bool RVPT::update()
     per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
     per_frame_data[current_frame_index].triangle_buffer.copy_to(triangles);
     per_frame_data[current_frame_index].material_buffer.copy_to(materials);
+
+    if (debug_overlay_enabled)
+    {
+        std::vector<DebugVertex> debug_triangles;
+        debug_triangles.reserve(triangles.size());
+        for (auto& tri : triangles)
+        {
+            glm::vec3 normal{tri.vertex0.w, tri.vertex1.w, tri.vertex2.w};
+            debug_triangles.push_back({glm::vec3(tri.vertex0), glm::vec3(1.f, 1.f, 0.f)});
+            debug_triangles.push_back({glm::vec3(tri.vertex1), glm::vec3(1.f, 0.f, 1.f)});
+            debug_triangles.push_back({glm::vec3(tri.vertex2), glm::vec3(0.f, 1.f, 1.f)});
+        }
+        size_t vert_byte_size = debug_triangles.size() * sizeof(DebugVertex);
+        if (per_frame_data[current_frame_index].debug_vertex_buffer.size() < vert_byte_size)
+        {
+            per_frame_data[current_frame_index].debug_vertex_buffer =
+                VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                           vert_byte_size, VK::MemoryUsage::cpu_to_gpu);
+        }
+        per_frame_data[current_frame_index].debug_vertex_buffer.copy_to(debug_triangles);
+        per_frame_data[current_frame_index].debug_camera_uniform.copy_to(
+            scene_camera.get_debug_data());
+    }
+
     return true;
 }
 
@@ -137,6 +169,8 @@ void RVPT::update_imgui()
         ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
         ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
         ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
+        if (ImGui::Button("Debug Viz")) toggle_debug();
+        if (ImGui::Button("Wireframe Viz")) toggle_wireframe_debug();
     }
     ImGui::End();
 
@@ -265,6 +299,9 @@ void RVPT::reload_shaders()
 
     pipeline_builder.recompile_pipelines();
 }
+
+void RVPT::toggle_debug() { debug_overlay_enabled = !debug_overlay_enabled; }
+void RVPT::toggle_wireframe_debug() { debug_wireframe_mode = !debug_wireframe_mode; }
 
 // Private functions //
 bool RVPT::context_init()
@@ -408,8 +445,7 @@ void RVPT::create_framebuffers()
 RVPT::RenderingResources RVPT::create_rendering_resources()
 {
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
-    };
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
 
     auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2);
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
@@ -422,7 +458,6 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         {6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
     };
-
 
     auto raytrace_descriptor_pool =
         VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
@@ -448,12 +483,45 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
 
     auto raytrace_pipeline = pipeline_builder.create_pipeline(raytrace_details);
 
+    std::vector<VkDescriptorSetLayoutBinding> debug_layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}};
+
+    auto debug_descriptor_pool =
+        VK::DescriptorPool(vk_device, debug_layout_bindings, MAX_FRAMES_IN_FLIGHT);
+    auto debug_pipeline_layout =
+        pipeline_builder.create_layout({debug_descriptor_pool.layout()}, {});
+
+    std::vector<VkVertexInputBindingDescription> binding_desc = {
+        {0, sizeof(DebugVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
+
+    std::vector<VkVertexInputAttributeDescription> attribute_desc = {
+        {0, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 0},
+        {1, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 4}};
+
+    VK::GraphicsPipelineDetails debug_details;
+    debug_details.pipeline_layout = debug_pipeline_layout;
+    debug_details.vert_shader = "debug_vis.vert.spv";
+    debug_details.frag_shader = "debug_vis.frag.spv";
+    debug_details.render_pass = fullscreen_tri_render_pass;
+    debug_details.extent = vkb_swapchain.extent;
+    debug_details.binding_desc = binding_desc;
+    debug_details.attribute_desc = attribute_desc;
+    debug_details.cull_mode = VK_CULL_MODE_NONE;
+
+    auto opaque = pipeline_builder.create_pipeline(debug_details);
+    debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
+    auto wireframe = pipeline_builder.create_pipeline(debug_details);
+
     return RVPT::RenderingResources{std::move(image_pool),
                                     std::move(raytrace_descriptor_pool),
+                                    std::move(debug_descriptor_pool),
                                     fullscreen_triangle_pipeline_layout,
                                     fullscreen_triangle_pipeline,
                                     raytrace_pipeline_layout,
-                                    raytrace_pipeline};
+                                    raytrace_pipeline,
+                                    debug_pipeline_layout,
+                                    opaque,
+                                    wireframe};
 }
 
 void RVPT::add_per_frame_data()
@@ -500,7 +568,8 @@ void RVPT::add_per_frame_data()
 
     // descriptor sets
     auto image_descriptor_set = VK::DescriptorSet(rendering_resources->image_pool.allocate());
-    auto temporal_image_descriptor_set = VK::DescriptorSet(rendering_resources->image_pool.allocate());
+    auto temporal_image_descriptor_set =
+        VK::DescriptorSet(rendering_resources->image_pool.allocate());
     auto raytracing_descriptor_set =
         VK::DescriptorSet(rendering_resources->raytrace_descriptor_pool.allocate());
 
@@ -512,15 +581,16 @@ void RVPT::add_per_frame_data()
     auto write_descriptor = descriptor_use.get_write_descriptor_set(image_descriptor_set.set);
     vkUpdateDescriptorSets(vk_device, 1, &write_descriptor, 0, nullptr);
 
-    std::vector<VkDescriptorImageInfo> temporal_image_descriptor_info = {temporal_storage_image.descriptor_info()};
-
+    std::vector<VkDescriptorImageInfo> temporal_image_descriptor_info = {
+        temporal_storage_image.descriptor_info()};
 
     VK::DescriptorUse image_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                            image_descriptor_info};
 
     VK::DescriptorUse temporal_descriptor_use{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                            temporal_image_descriptor_info};
-    auto temporal_image_descriptor = temporal_descriptor_use.get_write_descriptor_set(temporal_image_descriptor_set.set);
+                                              temporal_image_descriptor_info};
+    auto temporal_image_descriptor =
+        temporal_descriptor_use.get_write_descriptor_set(temporal_image_descriptor_set.set);
 
     std::vector<VkDescriptorBufferInfo> camera_buffer_descriptor_info = {
         camera_uniform.descriptor_info()};
@@ -560,16 +630,37 @@ void RVPT::add_per_frame_data()
         frame_settings_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         sphere_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
         triangle_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set),
-        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)
-    };
+        material_buffer_descriptor_use.get_write_descriptor_set(raytracing_descriptor_set.set)};
 
-    vkUpdateDescriptorSets(vk_device, write_descriptors.size(), write_descriptors.data(), 0,
-                           nullptr);
+    vkUpdateDescriptorSets(vk_device, static_cast<uint32_t>(write_descriptors.size()),
+                           write_descriptors.data(), 0, nullptr);
+
+    // Debug vis
+    auto debug_camera_uniform =
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                   sizeof(glm::mat4), VK::MemoryUsage::cpu_to_gpu);
+    auto debug_vertex_buffer =
+        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                   1000 * sizeof(DebugVertex), VK::MemoryUsage::cpu_to_gpu);
+
+    auto debug_descriptor_set =
+        VK::DescriptorSet(rendering_resources->debug_descriptor_pool.allocate());
+
+    std::vector<VkDescriptorBufferInfo> debug_camera_uniform_descriptor_info = {
+        debug_camera_uniform.descriptor_info()};
+    VK::DescriptorUse debug_camera_uniform_descriptor_use{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                                          debug_camera_uniform_descriptor_info};
+
+    auto debug_write_descriptor =
+        debug_camera_uniform_descriptor_use.get_write_descriptor_set(debug_descriptor_set.set);
+    vkUpdateDescriptorSets(vk_device, 1, &debug_write_descriptor, 0, nullptr);
+
     per_frame_data.push_back(RVPT::PerFrameData{
-        std::move(output_image), std::move(temporal_storage_image), std::move(camera_uniform), std::move(random_buffer),
-        std::move(settings_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
-        std::move(material_buffer), std::move(raytrace_command_buffer),
-        std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set});
+        std::move(output_image), std::move(temporal_storage_image), std::move(camera_uniform),
+        std::move(random_buffer), std::move(settings_uniform), std::move(sphere_buffer),
+        std::move(triangle_buffer), std::move(material_buffer), std::move(raytrace_command_buffer),
+        std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set,
+        std::move(debug_camera_uniform), std::move(debug_vertex_buffer), debug_descriptor_set});
 }
 
 void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index)
@@ -616,16 +707,31 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
     VkRect2D scissor{{0, 0}, vkb_swapchain.extent};
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline);
+    auto fullscreen_pipe =
+        pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline);
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, fullscreen_pipe);
 
-    vkCmdBindPipeline(
-        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline_builder.get_pipeline(rendering_resources->fullscreen_triangle_pipeline));
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             rendering_resources->fullscreen_triangle_pipeline_layout, 0, 1,
                             &per_frame_data[current_frame_index].image_descriptor_set.set, 0,
                             nullptr);
     vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+
+    if (debug_overlay_enabled)
+    {
+        auto pipeline = pipeline_builder.get_pipeline(
+            debug_wireframe_mode ? rendering_resources->debug_wireframe_pipeline
+                                 : rendering_resources->debug_opaque_pipeline);
+        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+        vkCmdBindDescriptorSets(
+            cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->debug_pipeline_layout, 0,
+            1, &per_frame_data[current_frame_index].debug_descriptor_sets.set, 0, nullptr);
+
+        bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_vertex_buffer);
+
+        vkCmdDraw(cmd_buf, triangles.size() * 3, 1, 0, 0);
+    }
 
     imgui_impl->draw(cmd_buf, current_frame_index);
 
@@ -643,7 +749,8 @@ void RVPT::record_compute_command_buffer()
     imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
     imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    imageMemoryBarrier.image = per_frame_data[current_frame_index].temporal_storage_image.image.handle;
+    imageMemoryBarrier.image =
+        per_frame_data[current_frame_index].temporal_storage_image.image.handle;
     imageMemoryBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
     imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;

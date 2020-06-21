@@ -630,7 +630,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = details.polygon_mode;
     rasterizer.lineWidth = details.line_width;
     rasterizer.cullMode = details.cull_mode;
     rasterizer.frontFace = details.front_face;
@@ -1069,6 +1069,13 @@ void Buffer::flush() { memory_ptr->flush(buffer.handle); }
 VkDeviceSize Buffer::size() const { return buf_size; }
 
 VkDescriptorBufferInfo Buffer::descriptor_info() const { return {buffer.handle, 0, buf_size}; }
+
+void bind_vertex_buffer(VkCommandBuffer command_buffer, Buffer const& buffer)
+{
+    VkDeviceSize offset = {0};
+    VkBuffer buf = buffer.get();
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, &buf, &offset);
+}
 
 // Image Layout Transition
 

@@ -5,6 +5,7 @@
 
 #include <iostream>
 
+#define GLM_DEPTH_ZERO_TO_ONE
 #include <glm/ext.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <imgui.h>
@@ -56,6 +57,10 @@ std::vector<glm::vec4> Camera::get_data()
     return data;
 }
 
+glm::mat4 Camera::get_debug_data()
+{
+    return glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.f) * matrix;
+}
 void Camera::update_imgui()
 {
     static bool is_active = true;

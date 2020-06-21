@@ -17,6 +17,7 @@ public:
     void rotate(float x, float y);
     void set_fov(float fov);
     std::vector<glm::vec4> get_data();
+    glm::mat4 get_debug_data();
     void update_imgui();
     glm::mat4 matrix{1.f};
 private:
