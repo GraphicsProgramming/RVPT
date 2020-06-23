@@ -110,7 +110,7 @@ private:
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
 
-    uint32_t current_frame_index = 0;
+    uint32_t current_sync_index = 0;
     std::vector<VK::SyncResources> sync_resources;
     std::vector<VkFence> frames_inflight_fences;
 
@@ -134,14 +134,16 @@ private:
         VkPipelineLayout debug_pipeline_layout;
         VK::GraphicsPipelineHandle debug_opaque_pipeline;
         VK::GraphicsPipelineHandle debug_wireframe_pipeline;
+
+        VK::Image temporal_storage_image;
     };
 
     std::optional<RenderingResources> rendering_resources;
 
+    uint32_t current_frame_index = 0;
     struct PerFrameData
     {
         VK::Image output_image;
-        VK::Image temporal_storage_image;
         VK::Buffer camera_uniform;
         VK::Buffer random_buffer;
         VK::Buffer settings_uniform;
