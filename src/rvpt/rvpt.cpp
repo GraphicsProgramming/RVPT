@@ -69,7 +69,8 @@ bool RVPT::initialize()
     }
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
 
-    fullscreen_tri_render_pass = VK::create_render_pass(vk_device, vkb_swapchain.image_format);
+    fullscreen_tri_render_pass = VK::create_render_pass(vk_device, vkb_swapchain.image_format,
+                                                        "fullscreen_image_copy_render_pass");
 
     imgui_impl.emplace(vk_device, *graphics_queue, pipeline_builder, memory_allocator,
                        fullscreen_tri_render_pass, vkb_swapchain.extent, MAX_FRAMES_IN_FLIGHT);
@@ -80,7 +81,7 @@ bool RVPT::initialize()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        add_per_frame_data();
+        add_per_frame_data(i);
     }
 
     return init;
@@ -130,9 +131,9 @@ bool RVPT::update()
         size_t vert_byte_size = debug_triangles.size() * sizeof(DebugVertex);
         if (per_frame_data[current_frame_index].debug_vertex_buffer.size() < vert_byte_size)
         {
-            per_frame_data[current_frame_index].debug_vertex_buffer =
-                VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                           vert_byte_size, VK::MemoryUsage::cpu_to_gpu);
+            per_frame_data[current_frame_index].debug_vertex_buffer = VK::Buffer(
+                vk_device, memory_allocator, "debug_vertex_buffer",
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vert_byte_size, VK::MemoryUsage::cpu_to_gpu);
         }
         per_frame_data[current_frame_index].debug_vertex_buffer.copy_to(debug_triangles);
         per_frame_data[current_frame_index].debug_camera_uniform.copy_to(
@@ -363,7 +364,7 @@ bool RVPT::context_init()
 
         return false;
     }
-    graphics_queue.emplace(vk_device, graphics_queue_index_ret.value());
+    graphics_queue.emplace(vk_device, graphics_queue_index_ret.value(), "graphics_queue");
 
     auto present_queue_index_ret = context.device.get_queue_index(vkb::QueueType::present);
     if (!present_queue_index_ret)
@@ -372,14 +373,17 @@ bool RVPT::context_init()
 
         return false;
     }
-    present_queue.emplace(vk_device, present_queue_index_ret.value());
+    present_queue.emplace(vk_device, present_queue_index_ret.value(), "present_queue");
 
     auto compute_queue_index_ret =
         context.device.get_dedicated_queue_index(vkb::QueueType::compute);
     if (compute_queue_index_ret)
     {
-        compute_queue.emplace(vk_device, compute_queue_index_ret.value());
+        compute_queue.emplace(vk_device, compute_queue_index_ret.value(), "compute_queue");
     }
+
+    VK::setup_debug_util_helper(vk_device);
+
     return true;
 }
 
@@ -440,8 +444,12 @@ void RVPT::create_framebuffers()
     for (uint32_t i = 0; i < vkb_swapchain.image_count; i++)
     {
         std::vector<VkImageView> image_views = {swapchain_image_views[i]};
+        VK::debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_IMAGE_VIEW,
+                                                     swapchain_image_views[i],
+                                                     "swapchain_image_view_" + std::to_string(i));
+
         framebuffers.emplace_back(vk_device, fullscreen_tri_render_pass, vkb_swapchain.extent,
-                                  image_views);
+                                  image_views, "swapchain_framebuffer_" + std::to_string(i));
     }
 }
 
@@ -450,7 +458,8 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
 
-    auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2);
+    auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2,
+                                         "image_descriptor_pool");
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
@@ -462,13 +471,14 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         {7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
     };
 
-    auto raytrace_descriptor_pool =
-        VK::DescriptorPool(vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT);
+    auto raytrace_descriptor_pool = VK::DescriptorPool(
+        vk_device, compute_layout_bindings, MAX_FRAMES_IN_FLIGHT, "raytrace_descriptor_pool");
 
-    auto fullscreen_triangle_pipeline_layout =
-        pipeline_builder.create_layout({image_pool.layout()}, {});
+    auto fullscreen_triangle_pipeline_layout = pipeline_builder.create_layout(
+        {image_pool.layout()}, {}, "fullscreen_triangle_pipeline_layout");
 
     VK::GraphicsPipelineDetails fullscreen_details;
+    fullscreen_details.name = "fullscreen_pipeline";
     fullscreen_details.pipeline_layout = fullscreen_triangle_pipeline_layout;
     fullscreen_details.vert_shader = "fullscreen_tri.vert.spv";
     fullscreen_details.frag_shader = "tex_sample.frag.spv";
@@ -477,10 +487,11 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
 
     auto fullscreen_triangle_pipeline = pipeline_builder.create_pipeline(fullscreen_details);
 
-    auto raytrace_pipeline_layout =
-        pipeline_builder.create_layout({raytrace_descriptor_pool.layout()}, {});
+    auto raytrace_pipeline_layout = pipeline_builder.create_layout(
+        {raytrace_descriptor_pool.layout()}, {}, "raytrace_pipeline_layout");
 
     VK::ComputePipelineDetails raytrace_details;
+    raytrace_details.name = "raytrace_compute_pipeline";
     raytrace_details.pipeline_layout = raytrace_pipeline_layout;
     raytrace_details.compute_shader = "compute_pass.comp.spv";
 
@@ -489,10 +500,10 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     std::vector<VkDescriptorSetLayoutBinding> debug_layout_bindings = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}};
 
-    auto debug_descriptor_pool =
-        VK::DescriptorPool(vk_device, debug_layout_bindings, MAX_FRAMES_IN_FLIGHT);
-    auto debug_pipeline_layout =
-        pipeline_builder.create_layout({debug_descriptor_pool.layout()}, {});
+    auto debug_descriptor_pool = VK::DescriptorPool(vk_device, debug_layout_bindings,
+                                                    MAX_FRAMES_IN_FLIGHT, "debug_descriptor_pool");
+    auto debug_pipeline_layout = pipeline_builder.create_layout({debug_descriptor_pool.layout()},
+                                                                {}, "debug_vis_pipeline_layout");
 
     std::vector<VkVertexInputBindingDescription> binding_desc = {
         {0, sizeof(DebugVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
@@ -502,6 +513,7 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         {1, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 4}};
 
     VK::GraphicsPipelineDetails debug_details;
+    debug_details.name = "debug_raster_view_pipeline";
     debug_details.pipeline_layout = debug_pipeline_layout;
     debug_details.vert_shader = "debug_vis.vert.spv";
     debug_details.frag_shader = "debug_vis.frag.spv";
@@ -515,13 +527,14 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
     auto wireframe = pipeline_builder.create_pipeline(debug_details);
 
-    auto temporal_storage_image = VK::Image(
-        vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width, window_ref.get_settings().height,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
-        static_cast<VkDeviceSize>(window_ref.get_settings().width *
-                                  window_ref.get_settings().height * 4),
-        VK::MemoryUsage::gpu);
+    auto temporal_storage_image =
+        VK::Image(vk_device, memory_allocator, *graphics_queue, "temporal_storage_image",
+                  VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+                  window_ref.get_settings().width, window_ref.get_settings().height,
+                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                  static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                            window_ref.get_settings().height * 4),
+                  VK::MemoryUsage::gpu);
 
     return RVPT::RenderingResources{std::move(image_pool),
                                     std::move(raytrace_descriptor_pool),
@@ -536,10 +549,11 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                     std::move(temporal_storage_image)};
 }
 
-void RVPT::add_per_frame_data()
+void RVPT::add_per_frame_data(int index)
 {
     auto output_image = VK::Image(
-        vk_device, memory_allocator, *graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
+        vk_device, memory_allocator, *graphics_queue,
+        "raytrace_output_image_" + std::to_string(index), VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width, window_ref.get_settings().height,
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
         static_cast<VkDeviceSize>(window_ref.get_settings().width *
@@ -548,34 +562,42 @@ void RVPT::add_per_frame_data()
 
     auto temp_camera_data = scene_camera.get_data();
     auto camera_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK::Buffer(vk_device, memory_allocator, "camera_uniform_" + std::to_string(index),
+                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                    sizeof(decltype(temp_camera_data)::value_type) * temp_camera_data.size(),
                    VK::MemoryUsage::cpu_to_gpu);
     auto random_buffer =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK::Buffer(vk_device, memory_allocator, "random_data_uniform_" + std::to_string(index),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                    sizeof(decltype(random_numbers)::value_type) * random_numbers.size(),
                    VK::MemoryUsage::cpu_to_gpu);
-    auto settings_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                   sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
-    auto sphere_buffer = VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                    sizeof(Sphere) * spheres.size(), VK::MemoryUsage::cpu_to_gpu);
+    auto settings_uniform = VK::Buffer(
+        vk_device, memory_allocator, "settings_buffer_" + std::to_string(index),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
+    auto sphere_buffer =
+        VK::Buffer(vk_device, memory_allocator, "spheres_buffer_" + std::to_string(index),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Sphere) * spheres.size(),
+                   VK::MemoryUsage::cpu_to_gpu);
     auto triangle_buffer =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                   sizeof(Triangle) * triangles.size(), VK::MemoryUsage::cpu_to_gpu);
+        VK::Buffer(vk_device, memory_allocator, "triangles_buffer_" + std::to_string(index),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Triangle) * triangles.size(),
+                   VK::MemoryUsage::cpu_to_gpu);
     auto material_buffer =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                   sizeof(Material) * materials.size(), VK::MemoryUsage::cpu_to_gpu);
+        VK::Buffer(vk_device, memory_allocator, "materials_buffer_" + std::to_string(index),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Material) * materials.size(),
+                   VK::MemoryUsage::cpu_to_gpu);
     auto raytrace_command_buffer =
-        VK::CommandBuffer(vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue);
-    auto raytrace_work_fence = VK::Fence(vk_device);
+        VK::CommandBuffer(vk_device, compute_queue.has_value() ? *compute_queue : *graphics_queue,
+                          "raytrace_command_buffer_" + std::to_string(index));
+    auto raytrace_work_fence = VK::Fence(vk_device, "raytrace_work_fence_" + std::to_string(index));
 
     // descriptor sets
-    auto image_descriptor_set = VK::DescriptorSet(rendering_resources->image_pool.allocate());
-    auto temporal_image_descriptor_set =
-        VK::DescriptorSet(rendering_resources->image_pool.allocate());
-    auto raytracing_descriptor_set =
-        VK::DescriptorSet(rendering_resources->raytrace_descriptor_pool.allocate());
+    auto image_descriptor_set = rendering_resources->image_pool.allocate(
+        "output_image_descriptor_set_" + std::to_string(index));
+    auto temporal_image_descriptor_set = rendering_resources->image_pool.allocate(
+        "temporal_image_descriptor_set_" + std::to_string(index));
+    auto raytracing_descriptor_set = rendering_resources->raytrace_descriptor_pool.allocate(
+        "raytrace_descriptor_set_" + std::to_string(index));
 
     // update descriptor sets with resources
     std::vector<VK::DescriptorUseVector> image_descriptors;
@@ -597,15 +619,15 @@ void RVPT::add_per_frame_data()
                                                                          raytracing_descriptors);
 
     // Debug vis
-    auto debug_camera_uniform =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                   sizeof(glm::mat4), VK::MemoryUsage::cpu_to_gpu);
-    auto debug_vertex_buffer =
-        VK::Buffer(vk_device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                   1000 * sizeof(DebugVertex), VK::MemoryUsage::cpu_to_gpu);
+    auto debug_camera_uniform = VK::Buffer(
+        vk_device, memory_allocator, "debug_camera_uniform_" + std::to_string(index),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(glm::mat4), VK::MemoryUsage::cpu_to_gpu);
+    auto debug_vertex_buffer = VK::Buffer(
+        vk_device, memory_allocator, "debug_vertecies_buffer_" + std::to_string(index),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 1000 * sizeof(DebugVertex), VK::MemoryUsage::cpu_to_gpu);
 
-    auto debug_descriptor_set =
-        VK::DescriptorSet(rendering_resources->debug_descriptor_pool.allocate());
+    auto debug_descriptor_set = rendering_resources->debug_descriptor_pool.allocate(
+        "debug_descriptor_set_" + std::to_string(index));
 
     std::vector<VK::DescriptorUseVector> debug_descriptors;
     debug_descriptors.push_back(std::vector{debug_camera_uniform.descriptor_info()});

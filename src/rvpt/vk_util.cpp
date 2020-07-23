@@ -54,6 +54,11 @@ auto gather_vk_types(std::vector<T> const& values)
     return types;
 }
 
+// Debug Utils Helper
+DebugUtilHelper debug_utils_helper;
+
+void setup_debug_util_helper(VkDevice device) { debug_utils_helper = DebugUtilHelper(device); }
+
 // Fence
 
 constexpr long DEFAULT_FENCE_TIMEOUT = 1000000000;
@@ -68,7 +73,11 @@ auto create_fence(VkDevice device, VkFenceCreateFlags flags)
     return HandleWrapper(device, handle, vkDestroyFence);
 }
 
-Fence::Fence(VkDevice device, VkFenceCreateFlags flags) : fence(create_fence(device, flags)) {}
+Fence::Fence(VkDevice device, std::string const& name, VkFenceCreateFlags flags)
+    : fence(create_fence(device, flags))
+{
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_FENCE, fence.handle, name);
+}
 
 bool Fence::check() const
 {
@@ -101,16 +110,20 @@ auto create_semaphore(VkDevice device)
     return HandleWrapper(device, semaphore, vkDestroySemaphore);
 }
 
-Semaphore::Semaphore(VkDevice device) : semaphore(create_semaphore(device)) {}
+Semaphore::Semaphore(VkDevice device, std::string const& name) : semaphore(create_semaphore(device))
+{
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_SEMAPHORE, semaphore.handle, name);
+}
 
 VkSemaphore Semaphore::get() const { return semaphore.handle; }
 
 // Queue
 
-Queue::Queue(VkDevice device, uint32_t queue_family, uint32_t queue_index)
+Queue::Queue(VkDevice device, uint32_t queue_family, std::string const& name, uint32_t queue_index)
     : queue_family(queue_family)
 {
     vkGetDeviceQueue(device, queue_family, queue_index, &queue);
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_QUEUE, queue, name);
 }
 
 void Queue::submit(CommandBuffer const& command_buffer, Fence& fence)
@@ -181,9 +194,11 @@ auto create_command_pool(VkDevice device, Queue const& queue, VkCommandPoolCreat
     return HandleWrapper(device, pool, vkDestroyCommandPool);
 }
 
-CommandPool::CommandPool(VkDevice device, Queue const& queue, VkCommandPoolCreateFlags flags)
+CommandPool::CommandPool(VkDevice device, Queue const& queue, std::string const& name,
+                         VkCommandPoolCreateFlags flags)
     : pool(create_command_pool(device, queue, flags))
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_COMMAND_POOL, pool.handle, name);
 }
 
 VkCommandBuffer CommandPool::allocate()
@@ -205,12 +220,13 @@ void CommandPool::free(VkCommandBuffer command_buffer)
 }
 
 // Command Buffer
-CommandBuffer::CommandBuffer(VkDevice device, Queue const& queue)
+CommandBuffer::CommandBuffer(VkDevice device, Queue const& queue, std::string const& name)
     : device(device),
       queue(&queue),
-      pool(device, queue, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
+      pool(device, queue, name + "'s command pool", VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
 {
     command_buffer = pool.allocate();
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_COMMAND_BUFFER, command_buffer, name);
 }
 CommandBuffer::~CommandBuffer()
 {
@@ -258,10 +274,10 @@ SyncResources::SyncResources(VkDevice device, Queue& graphics_queue, Queue& pres
     : graphics_queue(graphics_queue),
       present_queue(present_queue),
       swapchain(swapchain),
-      image_avail_sem(device),
-      render_finish_sem(device),
-      command_fence(device, VK_FENCE_CREATE_SIGNALED_BIT),
-      command_buffer(device, graphics_queue)
+      image_avail_sem(device, "image_avail_sem"),
+      render_finish_sem(device, "render_finish_sem"),
+      command_fence(device, "sync_res_fence", VK_FENCE_CREATE_SIGNALED_BIT),
+      command_buffer(device, graphics_queue, "sync_res_command_buffer")
 {
 }
 
@@ -314,9 +330,11 @@ VkWriteDescriptorSet DescriptorUse::get_write_descriptor_set(VkDescriptorSet set
 
 // DescriptorSet
 
-DescriptorSet::DescriptorSet(VkDevice device, VkDescriptorSet set, VkDescriptorSetLayout layout)
+DescriptorSet::DescriptorSet(VkDevice device, VkDescriptorSet set, VkDescriptorSetLayout layout,
+                             std::string const& name)
     : device(device), set(set), layout(layout)
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_DESCRIPTOR_SET, set, name);
 }
 void DescriptorSet::update(std::vector<DescriptorUse> descriptors) const
 {
@@ -376,15 +394,18 @@ auto create_descriptor_pool(VkDevice device,
 
 DescriptorPool::DescriptorPool(VkDevice device,
                                std::vector<VkDescriptorSetLayoutBinding> const& bindings,
-                               uint32_t count)
+                               uint32_t count, std::string const& name)
     : vk_layout(create_descriptor_set_layout(device, bindings)),
       pool(create_descriptor_pool(device, bindings, count)),
       bindings(bindings),
       max_sets(count)
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_DESCRIPTOR_POOL, pool.handle, name);
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, vk_layout.handle,
+                                             name + "_layout");
 }
 
-DescriptorSet DescriptorPool::allocate()
+DescriptorSet DescriptorPool::allocate(std::string const& name)
 {
     assert(current_sets < max_sets);
     VkDescriptorSet set;
@@ -397,7 +418,7 @@ DescriptorSet DescriptorPool::allocate()
     VkResult res = vkAllocateDescriptorSets(pool.device, &alloc_info, &set);
     assert(res == VK_SUCCESS);
 
-    return DescriptorSet{pool.device, set, vk_layout.handle};
+    return DescriptorSet{pool.device, set, vk_layout.handle, name};
 }
 void DescriptorPool::free(DescriptorSet set)
 {
@@ -429,7 +450,8 @@ void DescriptorPool::update_descriptor_sets(DescriptorSet const& set,
 
 // Render Pass
 
-VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format)
+VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
+                                std::string const& name)
 {
     VkAttachmentDescription color_attachment{};
     color_attachment.format = swapchain_image_format;
@@ -470,6 +492,7 @@ VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format
     VkRenderPass render_pass;
 
     VK_CHECK_RESULT(vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_RENDER_PASS, render_pass, name);
     return render_pass;
 }
 
@@ -498,9 +521,10 @@ auto create_framebuffer(VkDevice device, VkRenderPass render_pass, VkExtent2D ex
 }
 
 Framebuffer::Framebuffer(VkDevice device, VkRenderPass render_pass, VkExtent2D extent,
-                         std::vector<VkImageView> image_views)
+                         std::vector<VkImageView> image_views, std::string const& name)
     : framebuffer(create_framebuffer(device, render_pass, extent, image_views))
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_FRAMEBUFFER, framebuffer.handle, name);
 }
 
 // ShaderModule
@@ -517,9 +541,11 @@ auto create_shader_module(VkDevice device, std::vector<uint32_t> const& spirv_co
     return HandleWrapper(device, module, vkDestroyShaderModule);
 }
 
-ShaderModule::ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_code)
+ShaderModule::ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_code,
+                           std::string const& name)
     : module(create_shader_module(device, spirv_code))
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_SHADER_MODULE, module.handle, name);
 }
 
 PipelineBuilder::PipelineBuilder(VkDevice device, std::string const& source_folder)
@@ -545,7 +571,7 @@ VkPipeline PipelineBuilder::get_pipeline(ComputePipelineHandle const& handle)
 
 VkPipelineLayout PipelineBuilder::create_layout(
     std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
-    std::vector<VkPushConstantRange> const& push_constants)
+    std::vector<VkPushConstantRange> const& push_constants, std::string const& name)
 {
     VkPipelineLayoutCreateInfo pipeline_layout_info{};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -557,6 +583,8 @@ VkPipelineLayout PipelineBuilder::create_layout(
     VkPipelineLayout layout;
     VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &layout));
     layouts.push_back(layout);
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_PIPELINE_LAYOUT, layout, name);
+
     return layout;
 }
 
@@ -593,9 +621,11 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
     }
 
     ShaderModule vertex_module(
-        device, details.spirv_vert_data.size() == 0 ? vertex_code : details.spirv_vert_data);
+        device, details.spirv_vert_data.size() == 0 ? vertex_code : details.spirv_vert_data,
+        "vert_shader_for_" + details.name);
     ShaderModule fragment_module(
-        device, details.spirv_frag_data.size() == 0 ? fragment_code : details.spirv_frag_data);
+        device, details.spirv_frag_data.size() == 0 ? fragment_code : details.spirv_frag_data,
+        "frag_shader_for_" + details.name);
 
     VkPipelineShaderStageCreateInfo vertex_shader_create_info{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -713,6 +743,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
 
     VkPipeline pipeline;
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, cache, 1, &create_info, nullptr, &pipeline));
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_PIPELINE, pipeline, details.name);
 
     return pipeline;
 }
@@ -721,7 +752,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(ComputePipelineDetails con
     auto compute_code = load_spirv(details.compute_shader);
     assert(compute_code.size());
 
-    ShaderModule compute_module(device, compute_code);
+    ShaderModule compute_module(device, compute_code, "compute_shader_for_" + details.name);
 
     VkPipelineShaderStageCreateInfo compute_shader_create_info{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -738,6 +769,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(ComputePipelineDetails con
 
     VkPipeline pipeline;
     VK_CHECK_RESULT(vkCreateComputePipelines(device, cache, 1, &create_info, nullptr, &pipeline));
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_PIPELINE, pipeline, details.name);
     return pipeline;
 }
 void PipelineBuilder::recompile_pipelines()
@@ -1011,9 +1043,10 @@ auto create_sampler(VkDevice device)
     return HandleWrapper(device, sampler, vkDestroySampler);
 }
 
-Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat format,
-             VkImageTiling tiling, uint32_t width, uint32_t height, VkImageUsageFlags usage,
-             VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage)
+Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
+             VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
+             VkImageUsageFlags usage, VkImageLayout layout, VkDeviceSize size,
+             MemoryUsage memory_usage)
     : memory_ptr(&memory),
       image(create_image(device, format, tiling, {width, height, 1}, usage)),
       image_allocation(memory.allocate_image(image.handle, size, memory_usage)),
@@ -1026,14 +1059,20 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat fo
 {
     // no need to change layout
     if (layout == VK_IMAGE_LAYOUT_UNDEFINED) return;
-    Fence fence(device);
-    CommandBuffer cmd_buf(device, queue);
+    Fence fence(device, "image" + name + "_upload_fence");
+    CommandBuffer cmd_buf(device, queue, "image" + name + "_upload_cmd_buf");
     cmd_buf.begin();
     set_image_layout(cmd_buf.get(), image.handle, VK_IMAGE_LAYOUT_UNDEFINED, layout,
                      {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
     cmd_buf.end();
     queue.submit(cmd_buf, fence);
     fence.wait();
+
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_IMAGE, image.handle, name);
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_SAMPLER, sampler.handle,
+                                             name + "_sampler");
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_IMAGE_VIEW, image_view.handle,
+                                             name + "_view");
 }
 
 VkDescriptorImageInfo Image::descriptor_info() const
@@ -1057,13 +1096,14 @@ auto create_buffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
     return HandleWrapper(device, buffer, vkDestroyBuffer);
 }
 
-Buffer::Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
-               VkDeviceSize size, MemoryUsage memory_usage)
+Buffer::Buffer(VkDevice device, MemoryAllocator& memory, std::string const& name,
+               VkBufferUsageFlags usage, VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       buffer(create_buffer(device, size, usage)),
       buffer_allocation(memory.allocate_buffer(buffer.handle, size, memory_usage)),
       buf_size(size)
 {
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_BUFFER, buffer.handle, name);
 }
 void Buffer::map()
 {

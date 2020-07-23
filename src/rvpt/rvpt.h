@@ -169,7 +169,7 @@ private:
     void create_framebuffers();
 
     RenderingResources create_rendering_resources();
-    void add_per_frame_data();
+    void add_per_frame_data(int index);
 
     // Todo remove this(PLEASE REMEMBER)
     void addRectangle(glm::vec3, glm::vec3, glm::vec3, glm::vec3, int mat);
