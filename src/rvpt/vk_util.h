@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include <iostream>
+#include <string>
 #include <mutex>
 #include <variant>
 #include <vector>
@@ -26,6 +27,41 @@ const char* error_str(const VkResult result);
 
 namespace VK
 {
+struct DebugUtilHelper
+{
+    DebugUtilHelper() {}
+
+    DebugUtilHelper(VkDevice device) : device(device)
+    {
+        SetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
+        SetDebugUtilsObjectTagEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectTagEXT>(
+            vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectTagEXT"));
+    }
+
+    template <typename T>
+    void set_debug_object_name(VkObjectType type, T handle, std::string const& name)
+    {
+        if (name == "" || !SetDebugUtilsObjectNameEXT) return;
+
+        VkDebugUtilsObjectNameInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+        info.objectType = type;
+        info.objectHandle = (uint64_t)handle;
+        info.pObjectName = name.c_str();
+
+        SetDebugUtilsObjectNameEXT(device, &info);
+    }
+
+private:
+    VkDevice device;
+    PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectNameEXT = nullptr;
+    PFN_vkSetDebugUtilsObjectTagEXT SetDebugUtilsObjectTagEXT = nullptr;
+};
+
+extern DebugUtilHelper debug_utils_helper;
+void setup_debug_util_helper(VkDevice device);
+
 constexpr uint32_t FLAGS_NONE = 0;
 
 template <typename T, typename Deleter>
@@ -76,7 +112,7 @@ public:
 class Fence
 {
 public:
-    explicit Fence(VkDevice device, VkFenceCreateFlags flags = 0);
+    explicit Fence(VkDevice device, std::string const& name, VkFenceCreateFlags flags = 0);
 
     bool check() const;
     void wait(bool condition = true) const;
@@ -90,7 +126,8 @@ private:
 class Semaphore
 {
 public:
-    explicit Semaphore(VkDevice device);
+    explicit Semaphore(VkDevice device, std::string const& name);
+
     VkSemaphore get() const;
 
 private:
@@ -102,7 +139,8 @@ class CommandBuffer;
 class Queue
 {
 public:
-    explicit Queue(VkDevice device, uint32_t family, uint32_t queue_index = 0);
+    explicit Queue(VkDevice device, uint32_t family, std::string const& name,
+                   uint32_t queue_index = 0);
 
     void submit(CommandBuffer const& command_buffer, Fence& fence);
     void submit(CommandBuffer const& command_buffer, Fence const& fence,
@@ -126,7 +164,8 @@ private:
 class CommandPool
 {
 public:
-    explicit CommandPool(VkDevice device, Queue const& queue, VkCommandPoolCreateFlags flags = 0);
+    explicit CommandPool(VkDevice device, Queue const& queue, std::string const& name,
+                         VkCommandPoolCreateFlags flags = 0);
 
     VkCommandBuffer allocate();
     void free(VkCommandBuffer command_buffer);
@@ -138,7 +177,8 @@ private:
 class CommandBuffer
 {
 public:
-    explicit CommandBuffer(VkDevice device, Queue const& queue);
+    explicit CommandBuffer(VkDevice device, Queue const& queue, std::string const& name);
+
     ~CommandBuffer();
 
     CommandBuffer(CommandBuffer const& other) = delete;
@@ -200,7 +240,8 @@ public:
 class DescriptorSet
 {
 public:
-    explicit DescriptorSet(VkDevice device, VkDescriptorSet set, VkDescriptorSetLayout layout);
+    explicit DescriptorSet(VkDevice device, VkDescriptorSet set, VkDescriptorSetLayout layout,
+                           std::string const& name);
 
     void update(std::vector<DescriptorUse> descriptors) const;
     void bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point, VkPipelineLayout layout,
@@ -216,9 +257,9 @@ class DescriptorPool
 public:
     explicit DescriptorPool(VkDevice device,
                             std::vector<VkDescriptorSetLayoutBinding> const& bindings,
-                            uint32_t count);
+                            uint32_t count, std::string const& name);
 
-    DescriptorSet allocate();
+    DescriptorSet allocate(std::string const& name);
     void free(DescriptorSet set);
 
     VkDescriptorSetLayout layout();
@@ -234,18 +275,22 @@ private:
     uint32_t current_sets = 0;
 };
 
-VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format);
+VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
+                                std::string const& name);
 void destroy_render_pass(VkDevice device, VkRenderPass render_pass);
 struct Framebuffer
 {
-    Framebuffer(VkDevice device, VkRenderPass render_pass, VkExtent2D extent,
-                std::vector<VkImageView> image_views);
+    explicit Framebuffer(VkDevice device, VkRenderPass render_pass, VkExtent2D extent,
+                         std::vector<VkImageView> image_views, std::string const& name);
+
     HandleWrapper<VkFramebuffer, PFN_vkDestroyFramebuffer> framebuffer;
 };
 
 struct ShaderModule
 {
-    ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_code);
+    explicit ShaderModule(VkDevice device, std::vector<uint32_t> const& spirv_code,
+                          std::string const& name);
+
     HandleWrapper<VkShaderModule, PFN_vkDestroyShaderModule> module;
 };
 
@@ -253,6 +298,7 @@ std::vector<uint32_t> load_spirv(std::string const& filename);
 
 struct GraphicsPipelineDetails
 {
+    std::string name;
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
 
@@ -275,6 +321,7 @@ struct GraphicsPipelineDetails
 
 struct ComputePipelineDetails
 {
+    std::string name;
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
 
@@ -301,7 +348,8 @@ struct PipelineBuilder
     VkPipeline get_pipeline(ComputePipelineHandle const& handle);
 
     VkPipelineLayout create_layout(std::vector<VkDescriptorSetLayout> const& descriptor_layouts,
-                                   std::vector<VkPushConstantRange> const& push_constants);
+                                   std::vector<VkPushConstantRange> const& push_constants,
+                                   std::string const& name);
 
     GraphicsPipelineHandle create_pipeline(GraphicsPipelineDetails const& details);
     ComputePipelineHandle create_pipeline(ComputePipelineDetails const& details);
@@ -423,9 +471,10 @@ private:
 class Image
 {
 public:
-    explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, VkFormat format,
-                   VkImageTiling tiling, uint32_t width, uint32_t height, VkImageUsageFlags usage,
-                   VkImageLayout layout, VkDeviceSize size, MemoryUsage memory_usage);
+    explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
+                   VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
+                   VkImageUsageFlags usage, VkImageLayout layout, VkDeviceSize size,
+                   MemoryUsage memory_usage);
 
     VkImage get() const { return image.handle; }
     VkDescriptorImageInfo descriptor_info() const;
@@ -445,8 +494,8 @@ public:
 class Buffer
 {
 public:
-    explicit Buffer(VkDevice device, MemoryAllocator& memory, VkBufferUsageFlags usage,
-                    VkDeviceSize size, MemoryUsage memory_usage);
+    explicit Buffer(VkDevice device, MemoryAllocator& memory, std::string const& name,
+                    VkBufferUsageFlags usage, VkDeviceSize size, MemoryUsage memory_usage);
 
     VkBuffer get() const { return buffer.handle; }
 
@@ -490,5 +539,4 @@ void set_image_layout(VkCommandBuffer command_buffer, VkImage image, VkImageLayo
                       VkImageLayout new_image_layout, VkImageSubresourceRange subresource_range,
                       VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                       VkPipelineStageFlags dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
 }  // namespace VK

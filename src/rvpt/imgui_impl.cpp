@@ -110,18 +110,19 @@ auto create_font_texture(VkDevice device, VK::MemoryAllocator& memory_allocator,
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     size_t upload_size = width * height * 4 * sizeof(char);
 
-    VK::Image font_image(device, memory_allocator, graphics_queue, VK_FORMAT_R8G8B8A8_UNORM,
-                         VK_IMAGE_TILING_OPTIMAL, width, height,
+    VK::Image font_image(device, memory_allocator, graphics_queue, "imgui_font_image",
+                         VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, width, height,
                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, upload_size, VK::MemoryUsage::gpu);
 
-    VK::Buffer upload_buffer(device, memory_allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                             upload_size, VK::MemoryUsage::cpu_to_gpu);
+    VK::Buffer upload_buffer(device, memory_allocator, "imgui_font_upload_buffer",
+                             VK_BUFFER_USAGE_TRANSFER_SRC_BIT, upload_size,
+                             VK::MemoryUsage::cpu_to_gpu);
 
     upload_buffer.copy_bytes(pixels, upload_size);
     upload_buffer.flush();
 
-    VK::CommandBuffer command_buffer(device, graphics_queue);
+    VK::CommandBuffer command_buffer(device, graphics_queue, "imgui_font_upload_command_buffer");
     command_buffer.begin();
 
     VkImageMemoryBarrier copy_barrier[1] = {};
@@ -162,7 +163,7 @@ auto create_font_texture(VkDevice device, VK::MemoryAllocator& memory_allocator,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1,
                          use_barrier);
     command_buffer.end();
-    VK::Fence done_fence(device);
+    VK::Fence done_fence(device, "imgui_font_upload_fence");
     graphics_queue.submit(command_buffer, done_fence);
     done_fence.wait();
     font_image.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -174,7 +175,7 @@ auto create_descriptor_pool(VkDevice device, VkSampler font_sampler)
     std::vector<VkDescriptorSetLayoutBinding> bindings = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          &font_sampler}};
-    return VK::DescriptorPool{device, bindings, 1};
+    return VK::DescriptorPool{device, bindings, 1, "imgui_descriptor_pool"};
 }
 
 auto create_pipeline_layout(VkDevice device, VK::PipelineBuilder& pipeline_builder,
@@ -183,7 +184,7 @@ auto create_pipeline_layout(VkDevice device, VK::PipelineBuilder& pipeline_build
     std::vector<VkDescriptorSetLayout> layouts = {layout};
     std::vector<VkPushConstantRange> push_constants = {
         {VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 4}};
-    return pipeline_builder.create_layout(layouts, push_constants);
+    return pipeline_builder.create_layout(layouts, push_constants, "imgui_pipeline_layout");
 }
 
 auto create_vert_shader(VkDevice device)
@@ -219,6 +220,7 @@ auto create_pipeline(VkDevice device, VK::PipelineBuilder& pipeline_builder,
         {2, binding_desc[0].binding, VK_FORMAT_R8G8B8A8_UNORM, IM_OFFSETOF(ImDrawVert, col)}};
 
     VK::GraphicsPipelineDetails pipe_details;
+    pipe_details.name = "imgui_pipeline";
     pipe_details.pipeline_layout = layout;
     pipe_details.spirv_vert_data = vert;
     pipe_details.spirv_frag_data = frag;
@@ -240,16 +242,18 @@ ImguiImpl::ImguiImpl(VkDevice device, VK::Queue& graphics_queue,
       memory_allocator(memory_allocator),
       font_image(create_font_texture(device, memory_allocator, graphics_queue)),
       pool(create_descriptor_pool(device, font_image.sampler.handle)),
-      descriptor_set(pool.allocate()),
+      descriptor_set(pool.allocate("imgui_descriptor_set")),
       pipeline_layout(create_pipeline_layout(device, pipeline_builder, pool.layout())),
       pipeline(create_pipeline(device, pipeline_builder, pipeline_layout, render_pass, extent))
 {
     for (uint32_t i = 0; i < max_frames_in_flight; i++)
     {
-        vertex_buffers.emplace_back(device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                    1000 * 36, VK::MemoryUsage::cpu_to_gpu);
-        index_buffers.emplace_back(device, memory_allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                   1000 * 4, VK::MemoryUsage::cpu_to_gpu);
+        vertex_buffers.emplace_back(
+            device, memory_allocator, "imgui_vertex_buffer_" + std::to_string(i),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 1000 * 36, VK::MemoryUsage::cpu_to_gpu);
+        index_buffers.emplace_back(
+            device, memory_allocator, "imgui_index_buffer_" + std::to_string(i),
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 1000 * 4, VK::MemoryUsage::cpu_to_gpu);
     }
 
     VkDescriptorImageInfo write_descriptor[] = {font_image.descriptor_info()};
@@ -299,15 +303,15 @@ void ImguiImpl::draw(VkCommandBuffer command_buffer, uint32_t frame_index)
 
         if (vertex_buffers.at(frame_index).size() < vertex_size)
         {
-            vertex_buffers.at(frame_index) =
-                VK::Buffer(device, memory_allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertex_size,
-                           VK::MemoryUsage::cpu_to_gpu);
+            vertex_buffers.at(frame_index) = VK::Buffer(device, memory_allocator, "imgui_vertices",
+                                                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                                        vertex_size, VK::MemoryUsage::cpu_to_gpu);
         }
         if (index_buffers.at(frame_index).size() < index_size)
         {
-            index_buffers.at(frame_index) =
-                VK::Buffer(device, memory_allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, index_size,
-                           VK::MemoryUsage::cpu_to_gpu);
+            index_buffers.at(frame_index) = VK::Buffer(device, memory_allocator, "imgui_indices",
+                                                       VK_BUFFER_USAGE_INDEX_BUFFER_BIT, index_size,
+                                                       VK::MemoryUsage::cpu_to_gpu);
         }
 
         vertex_buffers.at(frame_index).copy_to(vertex_data);
