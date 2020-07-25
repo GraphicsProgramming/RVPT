@@ -13,26 +13,22 @@ void update_camera(Window& window, RVPT& rvpt)
     glm::vec3 movement{};
     double frameDelta = rvpt.time.since_last_frame();
 
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 2;
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT_CONTROL))
-        movement.y += static_cast<float>(3.0 * frameDelta);
-    if (window.is_key_down(Window::KeyCode::SPACE))
-        movement.y -= static_cast<float>(3.0 * frameDelta);
-    if (window.is_key_down(Window::KeyCode::KEY_W))
-        movement.z -= static_cast<float>(3.0 * frameDelta);
-    if (window.is_key_down(Window::KeyCode::KEY_S))
-        movement.z += static_cast<float>(3.0 * frameDelta);
-    if (window.is_key_down(Window::KeyCode::KEY_D))
-        movement.x -= static_cast<float>(3.0 * frameDelta);
-    if (window.is_key_down(Window::KeyCode::KEY_A))
-        movement.x += static_cast<float>(3.0 * frameDelta);
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 5;
+    if (window.is_key_down(Window::KeyCode::SPACE)) movement.y += 3.0f;
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT_CONTROL)) movement.y -= 3.0f;
+    if (window.is_key_down(Window::KeyCode::KEY_W)) movement.z += 3.0f;
+    if (window.is_key_down(Window::KeyCode::KEY_S)) movement.z -= 3.0f;
+    if (window.is_key_down(Window::KeyCode::KEY_D)) movement.x += 3.0f;
+    if (window.is_key_down(Window::KeyCode::KEY_A)) movement.x -= 3.0f;
 
-    rvpt.scene_camera.move(movement.x, movement.y, movement.z);
+    rvpt.scene_camera.move(static_cast<float>(frameDelta) * movement);
 
-    if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rvpt.scene_camera.rotate(0, 0.03f);
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rvpt.scene_camera.rotate(0, -0.03f);
-    if (window.is_key_down(Window::KeyCode::KEY_UP)) rvpt.scene_camera.rotate(-0.03f, 0);
-    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rvpt.scene_camera.rotate(0.03f, 0);
+    glm::vec3 rotation{};
+    if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rotation.x = 1.f;
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rotation.x = -1.f;
+    if (window.is_key_down(Window::KeyCode::KEY_UP)) rotation.y = 1.f;
+    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rotation.y = -1.f;
+    rvpt.scene_camera.rotate(rotation);
 }
 
 int main()
@@ -52,7 +48,6 @@ int main()
         std::cout << "failed to initialize RVPT\n";
         return 0;
     }
-
     while (!window.should_close())
     {
         window.poll_events();

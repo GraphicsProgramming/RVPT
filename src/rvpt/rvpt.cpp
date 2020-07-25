@@ -32,17 +32,23 @@ RVPT::RVPT(Window& window)
 
     random_numbers.resize(20480);
 
-    glm::vec3 translation(0, 0, -20);
-
-    spheres.emplace_back(glm::vec3(0, 10005, 0) + translation, 10000.f, 0);
-    spheres.emplace_back(glm::vec3(5, 0, -3) + translation, 3.f, 1);
-
-    triangles.emplace_back(glm::vec3(-3, 0.5, -3), glm::vec3(3, 0.5, -3), glm::vec3(-3, 0.5, 3), 2);
-
+    spheres.emplace_back(glm::vec3(0, -10005, 0), 10000.f, 0);
     materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.0, .7, .7, 0),
+
+    spheres.emplace_back(glm::vec3(0, 3, 0), 1.f, 1);
+    materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.7, .7, .7, 0),
                            Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.5, 0.5, 0.5, 0), glm::vec4(0, .1, .1, .1),
+
+    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 2);
+    triangles.emplace_back(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 3);
+    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 4);
+    triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 3);
+
+    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
+                           Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
+                           Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(.1, .1, .1, 0),
                            Material::Type::LAMBERT);
 }
 
@@ -88,11 +94,11 @@ bool RVPT::initialize()
 }
 bool RVPT::update()
 {
-    bool moved = last_camera_mat != scene_camera.matrix;
+    bool moved = last_camera_mat != scene_camera.get_ray_matrix();
     if (moved)
     {
         render_settings.current_frame = 0;
-        last_camera_mat = scene_camera.matrix;
+        last_camera_mat = scene_camera.get_ray_matrix();
     }
     else
     {
@@ -137,7 +143,7 @@ bool RVPT::update()
         }
         per_frame_data[current_frame_index].debug_vertex_buffer.copy_to(debug_triangles);
         per_frame_data[current_frame_index].debug_camera_uniform.copy_to(
-            scene_camera.get_debug_data());
+            scene_camera.get_debug_matrix());
     }
 
     return true;
@@ -163,7 +169,7 @@ void RVPT::update_imgui()
     // imgui back end can't show 2 windows
     static bool show_stats = true;
     ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize({160, 120});
+    ImGui::SetNextWindowSize({160, 160}, ImGuiCond_Once);
     if (ImGui::Begin("Stats", &show_stats))
     {
         ImGui::Text("Frame Time %.4f", time.average_frame_time());

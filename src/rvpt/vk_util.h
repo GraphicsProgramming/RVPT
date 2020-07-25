@@ -79,8 +79,8 @@ public:
             deleter(device, handle, nullptr);
         }
     };
-    HandleWrapper(HandleWrapper const& fence) = delete;
-    HandleWrapper& operator=(HandleWrapper const& fence) = delete;
+    HandleWrapper(HandleWrapper const& other) = delete;
+    HandleWrapper& operator=(HandleWrapper const& other) = delete;
 
     HandleWrapper(HandleWrapper&& other) noexcept
         : device(other.device), handle(other.handle), deleter(other.deleter)
