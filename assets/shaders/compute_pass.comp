@@ -10,10 +10,7 @@ layout(binding = 0, rgba8) uniform writeonly image2D result_image;
 layout(binding = 1, rgba8) uniform image2D temporal_image;
 layout(binding = 2) uniform Camera
 {
-    vec3 origin;
-    vec3 center;
-    vec3 horizontal;
-    vec3 vertical;
+    vec4 displacement;
     mat4 matrix;
 }
 cam;
@@ -52,7 +49,8 @@ bool colour(inout Ray ray, inout Record record)
     else
     {
         record.albedo = vec3(0);
-//        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
+        //        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5)
+        //        * 2);
         record.emission = vec3(0);
         record.reflectiveness = 0.0;
         return false;
@@ -81,7 +79,9 @@ vec3 trace(in Ray ray)
 
 void main()
 {
-    vec3 temporal_accumulation_sample = (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz * min(render_settings.current_frame, 1);
+    vec3 temporal_accumulation_sample =
+        (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
+        min(render_settings.current_frame, 1);
 
     vec3 sampled = vec3(0);
     for (int i = 0; i < render_settings.aa; i++)
@@ -94,10 +94,9 @@ void main()
     float current_frame = float(render_settings.current_frame);
 
     sampled /= render_settings.aa;
-    sampled = temporal_accumulation_sample * current_frame / (current_frame + 1) + sampled / (current_frame + 1);
+    sampled = temporal_accumulation_sample * current_frame / (current_frame + 1) +
+              sampled / (current_frame + 1);
 
-    imageStore(temporal_image, ivec2(gl_GlobalInvocationID.xy),
-                vec4(sampled, 0));
-    imageStore(result_image, ivec2(gl_GlobalInvocationID.xy),
-               vec4(sampled, 0));
+    imageStore(temporal_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
+    imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
 }

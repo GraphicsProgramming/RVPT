@@ -10,91 +10,89 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <imgui.h>
 
+constexpr glm::vec3 RIGHT = glm::vec3(1, 0, 0);
+constexpr glm::vec3 UP = glm::vec3(0, 1, 0);
+
+glm::mat4 get_view_matrix(glm::vec3 translation, glm::vec3 rotation)
+{
+    auto mat = glm::mat4{1.f};
+    mat = glm::translate(mat, translation);
+    mat = glm::rotate(mat, glm::radians(rotation.x), -UP);
+    mat = glm::rotate(mat, glm::radians(rotation.y), -RIGHT);
+    return mat;
+}
+
 Camera::Camera(float aspect) : fov(90), aspect(aspect) { recalculate_values(); }
 
-Camera::~Camera() = default;
-
-void Camera::move(float x, float y, float z)
+void Camera::move(glm::vec3 translation)
 {
-    matrix = glm::translate(matrix, glm::vec3(x, y, z));
+    translation.y *= -1.f;
+    translation.z *= -1.f;
+    auto translation_mat = get_view_matrix(this->translation, this->rotation);
+    this->translation += glm::vec3(translation_mat * glm::vec4(translation, 0));
 }
 
-void Camera::rotate(float x, float y)
-{
-    matrix /= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
-    x_angle += x;
-    y_angle += y;
-    matrix *= glm::eulerAngleYXZ(y_angle, x_angle, 0.f);
-}
-
+void Camera::rotate(glm::vec3 rotation) { this->rotation += rotation; }
 void Camera::set_fov(float in_fov) { fov = in_fov; }
 
 void Camera::recalculate_values()
 {
-    float theta = fov * 3.1415f / 180;
-    float half_height = tanf(theta / 2);
-    float half_width = aspect * half_height;
-    glm::vec3 w = glm::vec3(0, 0, -1);
-    glm::vec3 u = glm::normalize(glm::cross(glm::vec3(0, 1, 0), w));
-    glm::vec3 v = glm::cross(w, u);
-    center = origin + w;
-    horizontal = u * half_width;
-    vertical = v * half_height;
+    float theta = glm::radians(fov);
+    float view_height = tanf(theta / 2);
+    float view_width = aspect * view_height;
+    displacement = glm::vec2(view_width, view_height);
+
+    ray_matrix = get_view_matrix(this->translation, this->rotation);
+
+    debug_matrix =
+        glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.f) * glm::inverse(ray_matrix);
 }
 
 std::vector<glm::vec4> Camera::get_data()
 {
+    recalculate_values();
     std::vector<glm::vec4> data;
-    data.emplace_back(origin, 0);
-    data.emplace_back(center, 0);
-    data.emplace_back(horizontal, 0);
-    data.emplace_back(vertical, 0);
-    data.emplace_back(matrix[0]);
-    data.emplace_back(matrix[1]);
-    data.emplace_back(matrix[2]);
-    data.emplace_back(matrix[3]);
+    data.emplace_back(displacement, 0, 0);
+    data.emplace_back(ray_matrix[0]);
+    data.emplace_back(ray_matrix[1]);
+    data.emplace_back(ray_matrix[2]);
+    data.emplace_back(ray_matrix[3]);
 
     return data;
 }
 
-glm::mat4 Camera::get_debug_data()
+glm::mat4 Camera::get_ray_matrix()
 {
-    return glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.f) * matrix;
+    recalculate_values();
+    return ray_matrix;
 }
+glm::mat4 Camera::get_debug_matrix()
+{
+    recalculate_values();
+    return debug_matrix;
+}
+
 void Camera::update_imgui()
 {
     static bool is_active = true;
     ImGui::SetNextWindowPos({0, 160});
-    ImGui::SetNextWindowSize({200, 180});
+    ImGui::SetNextWindowSize({200, 130}, ImGuiCond_Once);
 
     if (ImGui::Begin("Camera Data", &is_active))
     {
         ImGui::SliderFloat("fov", &fov, 1, 179);
-
-        ImGui::DragFloat4("mat4[0]", glm::value_ptr(matrix[0]), 0.05f);
-        ImGui::DragFloat4("mat4[1]", glm::value_ptr(matrix[1]), 0.05f);
-        ImGui::DragFloat4("mat4[2]", glm::value_ptr(matrix[2]), 0.05f);
-        ImGui::DragFloat4("mat4[3]", glm::value_ptr(matrix[3]), 0.05f);
-
+        ImGui::DragFloat3("translation", glm::value_ptr(translation), 0.2f);
+        ImGui::DragFloat3("rotation", glm::value_ptr(rotation), 0.2f);
         ImGui::Text("Reset");
         ImGui::SameLine();
         if (ImGui::Button("Pos"))
         {
-            matrix = glm::mat4{1.f};
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Scale"))
-        {
-            matrix[0][0] = 1.f;
-            matrix[1][1] = 1.f;
-            matrix[2][2] = 1.f;
+            translation = {};
         }
         ImGui::SameLine();
         if (ImGui::Button("Rot"))
         {
-            matrix[0] = glm::vec4(matrix[0][0], 0.f, 0.f, 0.f);
-            matrix[1] = glm::vec4(0.f, matrix[1][1], 0.f, 0.f);
-            matrix[2] = glm::vec4(0.f, 0.f, matrix[2][2], 0.f);
+            rotation = {};
         }
     }
     ImGui::End();

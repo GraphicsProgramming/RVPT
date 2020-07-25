@@ -14,10 +14,12 @@ struct Material
         LAMBERT,
         DYNAMIC
     };
-    explicit Material(glm::vec4 a, glm::vec4 e, Type type) : albedo(a), emission(e)
+    explicit Material(glm::vec4 albedo, glm::vec4 emission, Type type)
+        : albedo(albedo), emission(emission)
     {
         data = glm::vec4();
-        switch(type){
+        switch (type)
+        {
             case Type::LAMBERT:
                 data.x = 0;
                 break;

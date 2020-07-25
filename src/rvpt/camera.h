@@ -11,17 +11,23 @@ class Camera
 {
 public:
     explicit Camera(float aspect);
-    ~Camera();
 
-    void move(float x, float y, float z);
-    void rotate(float x, float y);
+    void move(glm::vec3 translation);
+    void rotate(glm::vec3 rotation);
     void set_fov(float fov);
     std::vector<glm::vec4> get_data();
-    glm::mat4 get_debug_data();
+    glm::mat4 get_ray_matrix();
+    glm::mat4 get_debug_matrix();
     void update_imgui();
-    glm::mat4 matrix{1.f};
+
 private:
     void recalculate_values();
-    float fov{}, aspect{}, x_angle{}, y_angle{};
-    glm::vec3 origin{}, center{}, horizontal{}, vertical{};
+    float fov{}, aspect{};
+    glm::vec3 translation{};
+
+    glm::vec3 rotation{};
+    glm::vec2 displacement{};
+
+    glm::mat4 ray_matrix{1.f};
+    glm::mat4 debug_matrix{1.f};
 };
