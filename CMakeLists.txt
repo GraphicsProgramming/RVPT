@@ -6,9 +6,31 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
-add_executable(rvpt 
-    src/rvpt/main.cpp src/rvpt/rvpt.cpp src/rvpt/window.cpp src/rvpt/vk_util.cpp src/rvpt/imgui_impl.cpp
-    assets/shaders/fullscreen_tri.vert assets/shaders/tex_sample.frag src/rvpt/camera.cpp src/rvpt/timer.cpp)
+set (source_files 
+	src/rvpt/main.cpp 
+	src/rvpt/rvpt.cpp 
+	src/rvpt/window.cpp 
+	src/rvpt/vk_util.cpp 
+	src/rvpt/imgui_impl.cpp
+##	assets/shaders/fullscreen_tri.vert 
+##	assets/shaders/tex_sample.frag 
+	src/rvpt/camera.cpp 
+	src/rvpt/timer.cpp)
+
+set (header_files
+	src/rvpt/rvpt.h
+	src/rvpt/window.h
+	src/rvpt/vk_util.h
+	src/rvpt/imgui_impl.h
+	src/rvpt/camera.h
+	src/rvpt/timer.h
+	src/rvpt/geometry.h)
+
+add_executable(rvpt ${source_files} ${header_files})
+##    src/rvpt/main.cpp src/rvpt/rvpt.cpp src/rvpt/window.cpp src/rvpt/vk_util.cpp src/rvpt/imgui_impl.cpp
+##    assets/shaders/fullscreen_tri.vert assets/shaders/tex_sample.frag src/rvpt/camera.cpp src/rvpt/timer.cpp)
+
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rvpt)
 
 target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader

@@ -12,6 +12,7 @@ layout(binding = 2) uniform Camera
 {
     vec4 displacement;
     mat4 matrix;
+	vec4 params; /* aspect, hfov, 0, 0 */
 }
 cam;
 layout(binding = 3) buffer Random { float random_source[]; };
@@ -23,7 +24,6 @@ layout(binding = 4) uniform RenderSettings
 }
 render_settings;
 ivec2 dim = imageSize(result_image);
-float aspect = float(dim.x) / float(dim.y);
 
 #include "structs.glsl"
 
@@ -32,6 +32,7 @@ layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
 layout(std430, binding = 7) buffer Materials { Material materials[]; };
 
 #include "util.glsl"
+#include "camera.glsl"
 #include "samples_mapping.glsl"
 #include "intersection.glsl"
 #include "material.glsl"
@@ -79,6 +80,8 @@ vec3 trace(in Ray ray)
 
 void main()
 {
+
+
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
         min(render_settings.current_frame, 1);
@@ -86,8 +89,10 @@ void main()
     vec3 sampled = vec3(0);
     for (int i = 0; i < render_settings.aa; i++)
     {
-        vec2 coord = ((vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim) * 2.0 - 1;
-        Ray ray = get_ray(coord);
+        vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
+		coord.y = 1.0-coord.y; /* flip image vertically */
+		//coord.x *= aspect;  /* correct for aspect ratio */
+        Ray ray = camera_pinhole_ray(coord.x, coord.y);
         sampled += trace(ray);
     }
 

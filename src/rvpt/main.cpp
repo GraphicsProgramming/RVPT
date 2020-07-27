@@ -26,8 +26,8 @@ void update_camera(Window& window, RVPT& rvpt)
     glm::vec3 rotation{};
     if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rotation.x = 1.f;
     if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rotation.x = -1.f;
-    if (window.is_key_down(Window::KeyCode::KEY_UP)) rotation.y = 1.f;
-    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rotation.y = -1.f;
+    if (window.is_key_down(Window::KeyCode::KEY_UP)) rotation.y = -1.f;
+    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rotation.y = 1.f;
     rvpt.scene_camera.rotate(rotation);
 }
 
