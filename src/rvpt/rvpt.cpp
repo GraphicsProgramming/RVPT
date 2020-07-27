@@ -10,6 +10,8 @@
 #include <nlohmann/json.hpp>
 #include <imgui.h>
 
+constexpr int RenderModesCount = IM_ARRAYSIZE(RenderModes);
+
 struct DebugVertex
 {
     glm::vec3 pos;
@@ -110,14 +112,11 @@ bool RVPT::update()
     per_frame_data[current_frame_index].raytrace_work_fence.wait();
     per_frame_data[current_frame_index].raytrace_work_fence.reset();
 
-    per_frame_data[current_frame_index].camera_uniform.copy_to(scene_camera.get_data());
-    per_frame_data[current_frame_index].random_buffer.copy_to(random_numbers);
     per_frame_data[current_frame_index].settings_uniform.copy_to(render_settings);
+    per_frame_data[current_frame_index].random_buffer.copy_to(random_numbers);
+    per_frame_data[current_frame_index].camera_uniform.copy_to(scene_camera.get_data());
 
     float delta = static_cast<float>(time.since_last_frame());
-
-    // haha sphere go up and down go brrrrrrrr
-    //    spheres[1].origin.y += sin(delta * .1);
 
     per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
     per_frame_data[current_frame_index].triangle_buffer.copy_to(triangles);
@@ -151,6 +150,8 @@ bool RVPT::update()
 
 void RVPT::update_imgui()
 {
+    if (!show_imgui) return;
+
     ImGuiIO& io = ImGui::GetIO();
 
     // Setup display size (every frame to accommodate for window resizing)
@@ -168,14 +169,52 @@ void RVPT::update_imgui()
 
     // imgui back end can't show 2 windows
     static bool show_stats = true;
-    ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize({160, 160}, ImGuiCond_Once);
+    ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 205}, ImGuiCond_Once);
     if (ImGui::Begin("Stats", &show_stats))
     {
+        ImGui::PushItemWidth(80);
         ImGui::Text("Frame Time %.4f", time.average_frame_time());
         ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
         ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
         ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        float w = ImGui::CalcItemWidth();
+        float spacing = style.ItemInnerSpacing.x;
+        float button_sz = ImGui::GetFrameHeight();
+
+        static const char* current_item_text = RenderModes[render_settings.render_mode];
+
+        ImGui::Text("Render Mode");
+        if (ImGui::ArrowButton("##l", ImGuiDir_Left))
+        {
+            render_settings.render_mode =
+                (render_settings.render_mode - 1 + RenderModesCount) % RenderModesCount;
+            current_item_text = RenderModes[render_settings.render_mode];
+        }
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        if (ImGui::ArrowButton("##r", ImGuiDir_Right))
+        {
+            render_settings.render_mode =
+                (render_settings.render_mode + 1 + RenderModesCount) % RenderModesCount;
+            current_item_text = RenderModes[render_settings.render_mode];
+        }
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        ImGui::PushItemWidth(120);
+        if (ImGui::BeginCombo("##custom combo", current_item_text, ImGuiComboFlags_NoArrowButton))
+        {
+            for (int n = 0; n < IM_ARRAYSIZE(RenderModes); n++)
+            {
+                bool is_selected = (current_item_text == RenderModes[n]);
+                if (ImGui::Selectable(RenderModes[n], is_selected))
+                    current_item_text = RenderModes[n];
+                if (is_selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::PushItemWidth(0);
+
         if (ImGui::Button("Debug Viz")) toggle_debug();
         if (ImGui::Button("Wireframe Viz")) toggle_wireframe_debug();
     }
@@ -311,6 +350,7 @@ void RVPT::reload_shaders()
 
 void RVPT::toggle_debug() { debug_overlay_enabled = !debug_overlay_enabled; }
 void RVPT::toggle_wireframe_debug() { debug_wireframe_mode = !debug_wireframe_mode; }
+void RVPT::set_raytrace_mode(int mode) { render_settings.render_mode = mode; }
 
 // Private functions //
 bool RVPT::context_init()
@@ -467,9 +507,9 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     auto image_pool = VK::DescriptorPool(vk_device, layout_bindings, MAX_FRAMES_IN_FLIGHT * 2,
                                          "image_descriptor_pool");
     std::vector<VkDescriptorSetLayoutBinding> compute_layout_bindings = {
-        {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
@@ -557,6 +597,9 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
 
 void RVPT::add_per_frame_data(int index)
 {
+    auto settings_uniform = VK::Buffer(
+        vk_device, memory_allocator, "settings_buffer_" + std::to_string(index),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
     auto output_image = VK::Image(
         vk_device, memory_allocator, *graphics_queue,
         "raytrace_output_image_" + std::to_string(index), VK_FORMAT_R8G8B8A8_UNORM,
@@ -565,6 +608,11 @@ void RVPT::add_per_frame_data(int index)
         static_cast<VkDeviceSize>(window_ref.get_settings().width *
                                   window_ref.get_settings().height * 4),
         VK::MemoryUsage::gpu);
+    auto random_buffer =
+        VK::Buffer(vk_device, memory_allocator, "random_data_uniform_" + std::to_string(index),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                   sizeof(decltype(random_numbers)::value_type) * random_numbers.size(),
+                   VK::MemoryUsage::cpu_to_gpu);
 
     auto temp_camera_data = scene_camera.get_data();
     auto camera_uniform =
@@ -572,14 +620,6 @@ void RVPT::add_per_frame_data(int index)
                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                    sizeof(decltype(temp_camera_data)::value_type) * temp_camera_data.size(),
                    VK::MemoryUsage::cpu_to_gpu);
-    auto random_buffer =
-        VK::Buffer(vk_device, memory_allocator, "random_data_uniform_" + std::to_string(index),
-                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                   sizeof(decltype(random_numbers)::value_type) * random_numbers.size(),
-                   VK::MemoryUsage::cpu_to_gpu);
-    auto settings_uniform = VK::Buffer(
-        vk_device, memory_allocator, "settings_buffer_" + std::to_string(index),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
     auto sphere_buffer =
         VK::Buffer(vk_device, memory_allocator, "spheres_buffer_" + std::to_string(index),
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Sphere) * spheres.size(),
@@ -611,12 +651,12 @@ void RVPT::add_per_frame_data(int index)
     rendering_resources->image_pool.update_descriptor_sets(image_descriptor_set, image_descriptors);
 
     std::vector<VK::DescriptorUseVector> raytracing_descriptors;
+    raytracing_descriptors.push_back(std::vector{settings_uniform.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{output_image.descriptor_info()});
     raytracing_descriptors.push_back(
         std::vector{rendering_resources->temporal_storage_image.descriptor_info()});
-    raytracing_descriptors.push_back(std::vector{camera_uniform.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{random_buffer.descriptor_info()});
-    raytracing_descriptors.push_back(std::vector{settings_uniform.descriptor_info()});
+    raytracing_descriptors.push_back(std::vector{camera_uniform.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{sphere_buffer.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{triangle_buffer.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{material_buffer.descriptor_info()});
@@ -641,8 +681,8 @@ void RVPT::add_per_frame_data(int index)
                                                                       debug_descriptors);
 
     per_frame_data.push_back(RVPT::PerFrameData{
-        std::move(output_image), std::move(camera_uniform), std::move(random_buffer),
-        std::move(settings_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
+        std::move(settings_uniform), std::move(output_image), std::move(random_buffer),
+        std::move(camera_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
         std::move(material_buffer), std::move(raytrace_command_buffer),
         std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set,
         std::move(debug_camera_uniform), std::move(debug_vertex_buffer), debug_descriptor_set});
@@ -718,7 +758,9 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
         vkCmdDraw(cmd_buf, (uint32_t)triangles.size() * 3, 1, 0, 0);
     }
 
-    imgui_impl->draw(cmd_buf, current_frame_index);
+    if (show_imgui){
+        imgui_impl->draw(cmd_buf, current_frame_index);
+    }
 
     vkCmdEndRenderPass(cmd_buf);
     current_frame.command_buffer.end();

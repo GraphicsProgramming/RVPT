@@ -5,27 +5,26 @@
 #define PI 3.1415
 #define RAY_MIN_DIST 0.01
 
+#include "structs.glsl"
+
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(binding = 0, rgba8) uniform writeonly image2D result_image;
-layout(binding = 1, rgba8) uniform image2D temporal_image;
-layout(binding = 2) uniform Camera
+layout(binding = 0) uniform RenderSettings {
+    int max_bounces;
+    int aa;
+    uint current_frame;
+    int render_mode; // defined in rvpt.h
+} render_settings;
+layout(binding = 1, rgba8) uniform writeonly image2D result_image;
+layout(binding = 2, rgba8) uniform image2D temporal_image;
+layout(binding = 3) buffer Random { float random_source[]; };
+layout(binding = 4) uniform Camera
 {
     vec4 displacement;
     mat4 matrix;
 	vec4 params; /* aspect, hfov, 0, 0 */
 }
 cam;
-layout(binding = 3) buffer Random { float random_source[]; };
-layout(binding = 4) uniform RenderSettings
-{
-    int max_bounces;
-    int aa;
-    uint current_frame;
-}
-render_settings;
 ivec2 dim = imageSize(result_image);
-
-#include "structs.glsl"
 
 layout(std430, binding = 5) buffer Spheres { Sphere spheres[]; };
 layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
@@ -80,8 +79,6 @@ vec3 trace(in Ray ray)
 
 void main()
 {
-
-
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
         min(render_settings.current_frame, 1);
