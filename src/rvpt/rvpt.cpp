@@ -715,7 +715,7 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
 
         bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_vertex_buffer);
 
-        vkCmdDraw(cmd_buf, triangles.size() * 3, 1, 0, 0);
+        vkCmdDraw(cmd_buf, (uint32_t)triangles.size() * 3, 1, 0, 0);
     }
 
     imgui_impl->draw(cmd_buf, current_frame_index);
@@ -738,6 +738,11 @@ void RVPT::record_compute_command_buffer()
     in_temporal_image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     in_temporal_image_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     in_temporal_image_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    uint32_t queue_family =
+        compute_queue.has_value() ? compute_queue->get_family() : graphics_queue->get_family();
+    in_temporal_image_barrier.dstQueueFamilyIndex = queue_family;
+    in_temporal_image_barrier.srcQueueFamilyIndex = queue_family;
 
     vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK::FLAGS_NONE, 0, nullptr, 0,
