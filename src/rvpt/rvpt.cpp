@@ -94,11 +94,11 @@ bool RVPT::initialize()
 }
 bool RVPT::update()
 {
-    bool moved = last_camera_mat != scene_camera.get_ray_matrix();
+    bool moved = last_camera_mat != scene_camera.get_camera_matrix();
     if (moved)
     {
         render_settings.current_frame = 0;
-        last_camera_mat = scene_camera.get_ray_matrix();
+        last_camera_mat = scene_camera.get_camera_matrix();
     }
     else
     {
@@ -143,7 +143,7 @@ bool RVPT::update()
         }
         per_frame_data[current_frame_index].debug_vertex_buffer.copy_to(debug_triangles);
         per_frame_data[current_frame_index].debug_camera_uniform.copy_to(
-            scene_camera.get_debug_matrix());
+            scene_camera.get_pv_matrix());
     }
 
     return true;

@@ -12,8 +12,8 @@ out gl_PerVertex { vec4 gl_Position; };
 
 void main()
 {
-    vec3 inverted_pos = in_pos;
-    inverted_pos.y = inverted_pos.y * -1;
-    gl_Position = cam.matrix * vec4(inverted_pos, 1);
+    gl_Position = cam.matrix * vec4(in_pos, 1);
+	/* flip image vertically */
+	gl_Position.y = -gl_Position.y;
     out_norm = in_norm;
 }
