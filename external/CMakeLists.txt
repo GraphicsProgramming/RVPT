@@ -26,8 +26,8 @@ FetchContent_Declare(
 )
 FetchContent_Declare(
     nlohman_json
-    GIT_REPOSITORY https://github.com/nlohmann/json
-    GIT_TAG        v3.7.3
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
+    GIT_TAG        v3.8.0
 )
 FetchContent_MakeAvailable(glfw vk_bootstrap glm nlohman_json)
 
