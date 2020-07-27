@@ -8,12 +8,9 @@ void apply_record(inout Ray ray, inout Record record)
     if(mat.data.x == 0) // Lambert
     {
         ray.origin = record.intersection;
-        float x = rand();
-        float y = rand();
-        float phi =  2.0f * PI * x;
-        float cosTheta = 2.0f * y - 1.0f;
-        float a = sqrt(1.0f - cosTheta * cosTheta);
-        ray.direction = normalize(normal + vec3(a * cos(phi), a * sin(phi), cosTheta));
+        float u = rand();
+        float v = rand();
+		ray.direction = normalize(map_cosine_hemisphere_simple(u, v, normal));
         record.reflectiveness = max(0, dot(normal, ray.direction));
     }
     else if (mat.data.x == 1) // Glass
@@ -36,7 +33,7 @@ void apply_record(inout Ray ray, inout Record record)
     else if (mat.data.x == 2) // Dynamic
     {
         ray.origin = record.intersection;
-        ray.direction = mix( reflect(ray.direction, normal), normalize(random_unit_sphere_point()), mat.data.y);
+        ray.direction = reflect(ray.direction, normal); //normalize(random_unit_sphere_point()), mat.data.y);
         record.reflectiveness = 1.f;
     }
 }
