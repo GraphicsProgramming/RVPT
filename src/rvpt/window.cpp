@@ -172,7 +172,7 @@ void Window::mouse_click_callback(GLFWwindow* window, int button, int action, in
 void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for (auto& callback : window_ptr->mouse_move_callbacks) callback(x, y);
+    for (auto& callback : window_ptr->mouse_move_callbacks) callback((float)x, (float)y);
 
     ImGuiIO& io = ImGui::GetIO();
     io.MousePos = ImVec2((float)x, (float)y);
@@ -181,7 +181,7 @@ void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 void Window::scroll_callback(GLFWwindow* window, double x, double y)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-    for (auto& callback : window_ptr->scroll_callbacks) callback(x, y);
+    for (auto& callback : window_ptr->scroll_callbacks) callback((float)x, (float)y);
 
     ImGuiIO& io = ImGui::GetIO();
     io.MouseWheelH += static_cast<float>(x);

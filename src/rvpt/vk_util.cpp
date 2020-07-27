@@ -590,7 +590,7 @@ VkPipelineLayout PipelineBuilder::create_layout(
 
 GraphicsPipelineHandle PipelineBuilder::create_pipeline(GraphicsPipelineDetails const& details)
 {
-    uint32_t index = graphics_pipelines.size();
+    uint32_t index = (uint32_t)graphics_pipelines.size();
     graphics_pipelines.push_back(details);
     graphics_pipelines.back().pipeline = create_immutable_pipeline(details);
     return {index};
@@ -598,7 +598,7 @@ GraphicsPipelineHandle PipelineBuilder::create_pipeline(GraphicsPipelineDetails 
 
 ComputePipelineHandle PipelineBuilder::create_pipeline(ComputePipelineDetails const& details)
 {
-    uint32_t index = compute_pipelines.size();
+    uint32_t index = (uint32_t)compute_pipelines.size();
     compute_pipelines.push_back(details);
     compute_pipelines.back().pipeline = create_immutable_pipeline(details);
     return {index};
