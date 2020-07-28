@@ -149,25 +149,27 @@ vec3 integrator_Kajiya
 	Ray temp_ray = ray;
 	Isect info;
 	
-	float throughput = 1.0;
-	
-	/* Lambertian */
-	float albedo = 0.5/PI;
+	vec3 col = vec3(0);
+	vec3 throughput = vec3(1);
+	vec3 background = vec3(0);
 	
 	for (int i=0; i<nbounce; ++i)
 	{
 	
 	/* bluish background */
 	if (!intersect_scene (temp_ray, mint, maxt, info))
-		return throughput*vec3(0.7);
+		return col + throughput*background;
+	
+	col += throughput*info.mat.emissive;
 	
 	/* next ray */
-	temp_ray.direction = 
-		map_cosine_hemisphere_simple (rand(), rand(), info.normal);
+	throughput *= handle_material(info.mat, ray.direction, info.normal, temp_ray.direction);
+	/*temp_ray.direction = 
+		map_cosine_hemisphere_simple (rand(), rand(), info.normal);*/
 	temp_ray.origin = info.pos;
 		
 	/* pdf = cos/PI -> cosine cancels out -> mult by PI */
-	throughput *= albedo * PI;
+	//throughput *= albedo * PI;
 	
 	}
 	
