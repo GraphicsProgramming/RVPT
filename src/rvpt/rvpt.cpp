@@ -37,7 +37,7 @@ RVPT::RVPT(Window& window)
     spheres.emplace_back(glm::vec3(0, -10001, 0), 10000.f, 0);
     materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
 
-    spheres.emplace_back(glm::vec3(0, 1, 0), 1.f, 1);
+    spheres.emplace_back(glm::vec3(0, 1, 2), 1.f, 1);
     materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.7, .7, .7, 0),
                            Material::Type::LAMBERT);
 
@@ -47,7 +47,7 @@ RVPT::RVPT(Window& window)
     triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 3);
 
     materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
-                           Material::Type::LAMBERT);
+                           Material::Type::GLASS);
     materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
                            Material::Type::LAMBERT);
     materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(.1, .1, .1, 0),

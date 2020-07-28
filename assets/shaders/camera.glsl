@@ -19,7 +19,7 @@
 	- Add thin-lens camera.
 	- Add system of lenses camera (Kolb)?
 	- Fix ortho to accept scale parameters.
-	- Panini?
+	- Panini projection?
 	- Arbitrary mesh camera with bijective texture UVs?
 	- Add image/arbitrary shape apertures?
 */
@@ -63,11 +63,13 @@ Ray camera_ortho_ray
 */
  
 {
+	float scale_x = 4.0;
+	float scale_y = 4.0;
 	float aspect = cam.params.x;
 	float u = aspect * (2.0*x-1.0);
 	float v = 2.0*y-1.0;
 	
-    vec3 origin = (cam.matrix * vec4(u,v,0.0,1.0)).xyz;
+    vec3 origin = (cam.matrix * vec4(scale_x*u,scale_y*v,0.0,1.0)).xyz;
     vec3 direction = cam.matrix[2].xyz;
     return Ray(origin, direction);
 

@@ -36,8 +36,9 @@ layout(std430, binding = 7) buffer Materials { Material materials[]; };
 #include "camera.glsl"
 #include "samples_mapping.glsl"
 #include "intersection.glsl"
-#include "integrators.glsl"
 #include "material.glsl"
+#include "integrators.glsl"
+
 
 bool colour(inout Ray ray, inout Record record)
 {
@@ -80,6 +81,47 @@ vec3 trace(in Ray ray)
     return final;
 }
 
+vec3 eval_integrator
+
+	(int integrator_idx,
+	 Ray ray)
+	
+{
+	switch (integrator_idx)
+	{
+	case 0:
+		return integrator_binary(ray, 0, INF);
+	case 1:
+		return integrator_depth(ray, 0, INF);
+	case 2:
+		return integrator_normal(ray, 0, INF);
+	case 3:
+		return integrator_ao(ray, 0, INF, render_settings.max_bounces);
+	default:
+		return integrator_Kajiya(ray, 0, INF, render_settings.max_bounces);
+	}
+}
+
+
+Ray get_camera_ray
+
+	(int   camera_idx,
+	 float u,
+	 float v)
+	 
+{
+	switch (camera_idx)
+	{
+	case 0:
+		return camera_pinhole_ray(u, v);
+	case 1:
+		return camera_ortho_ray(u, v);
+	default:
+		return camera_spherical_ray(u, v);
+	}
+}
+
+
 void main()
 {
 
@@ -93,7 +135,11 @@ void main()
 		4: Kajiya
 		
 	*/
-	const int integrator_idx = render_settings.render_mode;
+	const int integrator_idx_left  = render_settings.render_mode;
+	const int integrator_idx_right = (integrator_idx_left + 1)%5;
+	const int camera_idx_left = 0;
+	const int camera_idx_right = 1;
+	const float x_split = 0.5;
 
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
@@ -104,23 +150,16 @@ void main()
     {
         vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
 		coord.y = 1.0-coord.y; /* flip image vertically */
-        Ray ray = camera_pinhole_ray(coord.x, coord.y);
-		switch (integrator_idx)
+        
+		if (coord.x < x_split)
 		{
-		case 0:
-			sampled += integrator_binary(ray, 0, INF);
-			break;
-		case 1:
-			sampled += integrator_depth(ray, 0, INF);
-			break;
-		case 2:
-			sampled += integrator_normal(ray, 0, INF);
-			break;
-		case 3:
-			sampled += integrator_ao(ray, 0, INF, render_settings.max_bounces);
-			break;
-		default:
-			sampled += integrator_Kajiya(ray, 0, INF, render_settings.max_bounces);
+			Ray ray = get_camera_ray(camera_idx_left, coord.x, coord.y);
+			sampled += eval_integrator(integrator_idx_left, ray);
+		}
+		else
+		{
+			Ray ray = get_camera_ray(camera_idx_right, coord.x, coord.y);
+			sampled += eval_integrator(integrator_idx_right, ray);			
 		}
         //sampled += trace(ray);
     }
