@@ -11,6 +11,16 @@
 /*--------------------------------------------------------------------------*/
 
 /*
+	TODO:
+	
+	- Add disk mapping.
+	- Add disk -> hemisphere cosine mapping.
+	- Add uniform triangle mapping.
+*/
+
+/*--------------------------------------------------------------------------*/
+
+/*
 	This should probably go in a separate file.
 	
 	A collection of functions for mapping samples in [0,1]^2

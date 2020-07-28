@@ -34,10 +34,10 @@ RVPT::RVPT(Window& window)
 
     random_numbers.resize(20480);
 
-    spheres.emplace_back(glm::vec3(0, -10005, 0), 10000.f, 0);
+    spheres.emplace_back(glm::vec3(0, -10001, 0), 10000.f, 0);
     materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
 
-    spheres.emplace_back(glm::vec3(0, 3, 0), 1.f, 1);
+    spheres.emplace_back(glm::vec3(0, 1, 0), 1.f, 1);
     materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.7, .7, .7, 0),
                            Material::Type::LAMBERT);
 

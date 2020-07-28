@@ -23,7 +23,7 @@
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-static const char* RenderModes[] = {"path tracing", "debug"};
+static const char* RenderModes[] = {"binary", "depth", "normals", "ambient occlusion", "Kajiya"};
 
 class RVPT
 {
