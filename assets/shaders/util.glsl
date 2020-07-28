@@ -10,6 +10,14 @@
 
 /*--------------------------------------------------------------------------*/
 
+/*
+	TODO:
+	
+	- Fix the PRNG.
+*/
+
+/*--------------------------------------------------------------------------*/
+
 ivec2 image_size = imageSize(result_image);
 uint base_index = (gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_size.x) ^ 237283 * image_size.y;
 uint index = 0;

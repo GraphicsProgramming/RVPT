@@ -10,6 +10,22 @@
 
 /*--------------------------------------------------------------------------*/
 
+/*
+	TODO:
+	
+	- Fix fov change on cpp side to update the camera: it keeps accumulating 
+	frames otherwise.
+	- Add sphere cap camera (parametrized by angle).
+	- Add thin-lens camera.
+	- Add system of lenses camera (Kolb)?
+	- Fix ortho to accept scale parameters.
+	- Panini?
+	- Arbitrary mesh camera with bijective texture UVs?
+	- Add image/arbitrary shape apertures?
+*/
+
+/*--------------------------------------------------------------------------*/
+
 Ray camera_pinhole_ray
 
 	(float x,    /* x coordinate in [0, 1] */
