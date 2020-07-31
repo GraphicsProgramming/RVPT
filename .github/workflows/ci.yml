@@ -2,23 +2,29 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   build:
-
-    runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
-        os: [ubuntu-18.04, ubuntu-20.04]
         config: [Debug, Release]
+        os: [ubuntu-18.04, ubuntu-20.04]
+
+    runs-on: ${{ matrix.os }}
+    container:
+      image: nickclark2016/vulkan-sdk-containers:${{ matrix.os }}-1.2.135
 
     steps:
       - uses: actions/checkout@v2
-      - name: configure
-        run: wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add - && sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.2.135-bionic.list http://packages.lunarg.com/vulkan/1.2.135/lunarg-vulkan-1.2.135-bionic.list && sudo apt update && sudo apt-get install -y libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev cmake vulkan-sdk && mkdir build
+      - name: cmake-install
+        run: |
+          apt-get install -y curl && \
+          curl -sL https://cmake.org/files/v3.17/cmake-3.17.0-Linux-x86_64.sh -o cmakeinstall.sh && \
+          chmod +x cmakeinstall.sh && \
+          ./cmakeinstall.sh --prefix=/usr/local --exclude-subdir && \
+          rm cmakeinstall.sh
       - name: build
-        run: cd build && rm -rf * && cmake -DCMAKE_BUILD_TYPE=${{matrix.config}} .. && cmake --build .
+        run: mkdir build && cd build && rm -rf * && cmake -DCMAKE_BUILD_TYPE=${{ matrix.config }} .. && cmake --build .
