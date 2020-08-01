@@ -10,28 +10,15 @@ struct Material
 {
     enum class Type
     {
-        GLASS,
         LAMBERT,
-        DYNAMIC
+        MIRROR,
+        DIELECTRIC
     };
     explicit Material(glm::vec4 albedo, glm::vec4 emission, Type type)
         : albedo(albedo), emission(emission)
     {
         data = glm::vec4();
-        switch (type)
-        {
-            case Type::LAMBERT:
-                data.x = 0;
-                break;
-            case Type::GLASS:
-                data.x = 1;
-                break;
-            case Type::DYNAMIC:
-                data.x = 2;
-                break;
-            default:
-                data.x = 0;
-        }
+        data.x = (float)type;
     }
     glm::vec4 albedo{};
     glm::vec4 emission{};

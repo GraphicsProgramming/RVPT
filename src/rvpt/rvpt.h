@@ -63,9 +63,9 @@ public:
     struct RenderSettings
     {
         int max_bounces = 8;
-        int aa = 16;
+        int aa = 1;
         uint32_t current_frame = 1;
-        int render_mode = 0;
+        int render_mode = 4;
     } render_settings;
 
 private:
