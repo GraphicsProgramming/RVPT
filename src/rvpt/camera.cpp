@@ -82,14 +82,16 @@ glm::mat4 Camera::get_pv_matrix()
 void Camera::update_imgui()
 {
     static bool is_active = true;
-    ImGui::SetNextWindowPos({0, 160});
-    ImGui::SetNextWindowSize({200, 130}, ImGuiCond_Once);
+    ImGui::SetNextWindowPos({0, 205}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 215}, ImGuiCond_Once);
 
     if (ImGui::Begin("Camera Data", &is_active))
     {
+        ImGui::PushItemWidth(100);
         ImGui::SliderFloat("fov", &fov, 1, 179);
         ImGui::DragFloat3("translation", glm::value_ptr(translation), 0.2f);
         ImGui::DragFloat3("rotation", glm::value_ptr(rotation), 0.2f);
+        ImGui::PushItemWidth(130);
         ImGui::DragFloat4("mat4[0]", glm::value_ptr(camera_matrix[0]), 0.05f);
         ImGui::DragFloat4("mat4[1]", glm::value_ptr(camera_matrix[1]), 0.05f);
         ImGui::DragFloat4("mat4[2]", glm::value_ptr(camera_matrix[2]), 0.05f);

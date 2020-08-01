@@ -34,6 +34,28 @@
 
 /*--------------------------------------------------------------------------*/
 
+struct Material_new
+{
+	int  type; /* 0: diffuse, 1: perfect mirror */
+	vec3 base_color;
+	vec3 emissive;
+    float ior;
+};
+
+Material_new convert_old_material
+
+	(Material mat)
+	
+{
+	Material_new res;
+	res.type = int(mat.data.x);
+	res.base_color = mat.albedo.xyz;
+	res.emissive = mat.emission.xyz;
+    res.ior = mat.albedo.w;
+	
+	return res;
+}
+
 struct Isect
 
 /*
@@ -45,6 +67,7 @@ struct Isect
 	vec3  pos;    /* position in global coordinates */
 	vec3  normal; /* normal in global coordinates */
 	vec2  uv;     /* surface parametrization (for textures) */
+	Material_new mat;
 	
 }; /* Isect */
 
@@ -307,16 +330,6 @@ bool intersect_triangle_any_fast
 	float t = dot(v0-ray.origin,n) / dot(ray.direction,n);
 	vec3 p = ray.origin + t*ray.direction;
 	
-	/*
-		p = v0 + u*e0 + v*e1
-		<p-v0,e0> = u*<e0,e0> + v*<e0,e1>
-		<p-v0,e1> = u*<e0,e1> + v*<e1,e1>
-		
-		b = A * (u,v);
-		
-		(u,v) = inv(A) * b
-	*/
-	
 	/* intersection position relative to v0 */
 	vec3 p0 = p - v0;
 	
@@ -359,24 +372,14 @@ bool intersect_triangle_fast
 */
 	 
 {
-	/* edges and unit normal */
+	/* edges and non-normalized normal */
 	vec3 e0 = v1-v0;
 	vec3 e1 = v2-v0;
-	vec3 n = normalize(cross(e0,e1));
+	vec3 n = cross(e0,e1);
 	
 	/* intersect plane in which the triangle is situated */
 	float t = dot(v0-ray.origin,n) / dot(ray.direction,n);
 	vec3 p = ray.origin + t*ray.direction;
-	
-	/*
-		p = v0 + u*e0 + v*e1
-		<p-v0,e0> = u*<e0,e0> + v*<e0,e1>
-		<p-v0,e1> = u*<e0,e1> + v*<e1,e1>
-		
-		b = A * (u,v);
-		
-		(u,v) = inv(A) * b
-	*/
 	
 	/* intersection position relative to v0 */
 	vec3 p0 = p - v0;
@@ -479,13 +482,22 @@ bool intersect_scene
 		
 		/* inverse transform on the ray, needs to be changed to 3x3/4x4 mat */
 		Ray temp_ray;
-		temp_ray.origin = (ray.origin - sphere.origin)/sphere.radius;
+		temp_ray.origin = (ray.origin - sphere.origin) / sphere.radius;
 		temp_ray.direction = ray.direction / sphere.radius;
 		
-		intersect_sphere(temp_ray, mint, closest_t, temp_isect);
+        /*
+            g(x) = 0, x \in S
+            M(x) \in M(S) -> g(M^{-1}(x)) = 0 -> x \in S
+            
+        */
+        
+		//intersect_sphere(temp_ray, mint, closest_t, temp_isect);
+        intersect_sphere(temp_ray, mint, closest_t, temp_isect);
 		if (temp_isect.t<closest_t)
 		{
 			info = temp_isect;
+			Material mat = materials[int(sphere.mat_id.x)];
+			info.mat = convert_old_material(mat);
 		}
 		closest_t = min(temp_isect.t, closest_t);
 	}
@@ -504,19 +516,15 @@ bool intersect_scene
 		if (temp_isect.t<closest_t)
 		{
 			info = temp_isect;
+			Material mat = materials[int(triangle.mat_id.x)];
+			info.mat = convert_old_material(mat);
 		}
 		closest_t = min(temp_isect.t, closest_t);
 	}
 	
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
-	
-	/* flip normal to face the direction where the ray came from */
-	info.normal = dot(ray.direction, info.normal) < 0 ? 
-					info.normal : -info.normal;
 					
-	/* offset intersection along the normal to avoid self-intersection */
-	info.pos = closest_t < INF? 
-		ray.origin + info.t * ray.direction + EPSILON*info.normal : vec3(0);
+	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
 	
 	return closest_t<INF;
 	

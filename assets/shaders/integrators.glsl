@@ -139,7 +139,9 @@ vec3 integrator_Kajiya
 	 
 /*
 	An integrator based on the rendering equation as described 
-	in Kajiya's paper (standard path tracing).
+	in Kajiya's paper (standard path tracing):
+    
+    The Rendering Equation, James Kajiya, 1986
 	
 	under construction
 */
@@ -149,25 +151,108 @@ vec3 integrator_Kajiya
 	Ray temp_ray = ray;
 	Isect info;
 	
-	float throughput = 1.0;
-	
-	/* Lambertian */
-	float albedo = 0.5/PI;
+	vec3 col = vec3(0);
+	vec3 throughput = vec3(1);
+	vec3 background;
 	
 	for (int i=0; i<nbounce; ++i)
 	{
 	
-	/* bluish background */
-	if (!intersect_scene (temp_ray, mint, maxt, info))
-		return throughput*vec3(0.7);
-	
-	/* next ray */
-	temp_ray.direction = 
-		map_cosine_hemisphere_simple (rand(), rand(), info.normal);
-	temp_ray.origin = info.pos;
-		
-	/* pdf = cos/PI -> cosine cancels out -> mult by PI */
-	throughput *= albedo * PI;
+        /* intersected nothing -> background */
+        if (!intersect_scene (temp_ray, mint, maxt, info))
+            return col + throughput*mix(vec3(1),vec3(0.2,0.3,0.7), temp_ray.direction.y);
+        
+        /* intersected an object -> add emission */
+        col += throughput*info.mat.emissive;
+        
+        /* intersection data */
+        vec3 pos = info.pos;
+        vec3 normal = info.normal;
+        vec3 dir_in = normalize(temp_ray.direction);
+        vec3 dir_out;
+        
+        /* cos angle with the normal */
+        float cos_theta = dot(dir_in, normal);
+        /* the absolute value of the cosine */
+        float cos_in;
+        /* whether the normal needs to be flipped */
+        bool flipped_normal = cos_theta > 0.0;
+        /* indices of refraction (ior) on the inside */
+        float eta = info.mat.ior;
+        /* ray arrives from the "inside" */
+        if (flipped_normal)
+        {
+            /* cos_theta > 0 */
+            cos_in = cos_theta;
+            /* flip normal */
+            normal = -normal;
+        }
+        else /* ray arrives from the outside */
+        {
+            cos_in = -cos_theta; /* cos_theta <= 0 */
+            /* flip ior ratio, assume outside is always air (1.0) */
+            eta = 1.0/eta;
+        }
+        
+        /* Handle different materials */
+        switch (info.mat.type)
+        {
+        case 0: /* Lambert */
+            /* offset to upper hemisphere to avoid self-intersection */
+            temp_ray.origin = pos + EPSILON * normal;
+            /* scatter cosine weighted */
+            temp_ray.direction = mat_scatter_Lambert_cos(normal);
+            throughput *= mat_eval_Lambert_cos(info.mat.base_color/PI);
+            break;
+            
+        case 1: /* perfect mirror */
+            /* offset to upper hemisphere to avoid self-intersection */
+            temp_ray.origin = pos + EPSILON * normal;
+            /* reflect */
+            temp_ray.direction = dir_in + 2*cos_in*normal;
+            throughput *= mat_eval_mirror(info.mat.base_color);    
+            break;
+            
+        case 2: /* dielectric */
+        {
+            float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
+            if (cos_out_sqr<=0) /* total internal reflection */
+            {
+                /* upper hemisphere offset */
+                temp_ray.origin = pos + EPSILON * normal;       
+                /* reflection */
+                temp_ray.direction = dir_in + 2*cos_in*normal;
+            }
+            else
+            {
+                /* refraction cosine */
+                float cos_out = sqrt(max(0,cos_out_sqr));
+                /* Fresnel reflectance */
+                float frefl = frensel_reflectance(cos_in,cos_out,eta);
+                
+                /* reflection due to Fresnel */
+                if (rand() < frefl)
+                {
+                    /* upper hemisphere offset */
+                    temp_ray.origin = pos + EPSILON * normal; 
+                    /* reflection */
+                    temp_ray.direction = dir_in + 2*cos_in*normal;
+                }
+                else /* refraction */
+                {
+                    /* lower hemisphere offset */
+                    temp_ray.origin = pos - EPSILON * normal;
+                    /* refraction, cos_in = -dot(d,n) */
+                    temp_ray.direction = eta*dir_in 
+                                       + (eta*cos_in-cos_out)*normal;
+                }
+            }
+            throughput *= mat_eval_dielectric(info.mat.base_color);   
+            break;
+        }
+        default:
+            return vec3(0);
+        }
 	
 	}
 	

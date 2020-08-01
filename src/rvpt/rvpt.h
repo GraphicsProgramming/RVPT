@@ -23,6 +23,8 @@
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
+static const char* RenderModes[] = {"binary", "depth", "normals", "ambient occlusion", "Kajiya"};
+
 class RVPT
 {
 public:
@@ -53,6 +55,7 @@ public:
     void reload_shaders();
     void toggle_debug();
     void toggle_wireframe_debug();
+    void set_raytrace_mode(int mode);
 
     Camera scene_camera;
     Timer time;
@@ -60,20 +63,23 @@ public:
     struct RenderSettings
     {
         int max_bounces = 8;
-        int aa = 16;
+        int aa = 1;
         uint32_t current_frame = 1;
+        int render_mode = 4;
     } render_settings;
 
 private:
-    Window& window_ref;
-    std::string source_folder = "";
-
+    bool show_imgui = true;
+    
     // from a callback
     bool framebuffer_resized = false;
 
     // enable debug overlay
     bool debug_overlay_enabled = false;
     bool debug_wireframe_mode = false;
+
+    Window& window_ref;
+    std::string source_folder = "";
 
     // Random number generators
     std::mt19937 random_generator;
@@ -143,10 +149,10 @@ private:
     uint32_t current_frame_index = 0;
     struct PerFrameData
     {
-        VK::Image output_image;
-        VK::Buffer camera_uniform;
-        VK::Buffer random_buffer;
         VK::Buffer settings_uniform;
+        VK::Image output_image;
+        VK::Buffer random_buffer;
+        VK::Buffer camera_uniform;
         VK::Buffer sphere_buffer;
         VK::Buffer triangle_buffer;
         VK::Buffer material_buffer;
