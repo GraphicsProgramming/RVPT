@@ -13,13 +13,13 @@ void update_camera(Window& window, RVPT& rvpt)
     glm::vec3 movement{};
     double frameDelta = rvpt.time.since_last_frame();
 
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 5;
-    if (window.is_key_down(Window::KeyCode::SPACE)) movement.y += 3.0f;
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT_CONTROL)) movement.y -= 3.0f;
-    if (window.is_key_down(Window::KeyCode::KEY_W)) movement.z += 3.0f;
-    if (window.is_key_down(Window::KeyCode::KEY_S)) movement.z -= 3.0f;
-    if (window.is_key_down(Window::KeyCode::KEY_D)) movement.x += 3.0f;
-    if (window.is_key_down(Window::KeyCode::KEY_A)) movement.x -= 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_LEFT_SHIFT)) frameDelta *= 5;
+    if (window.is_key_held(Window::KeyCode::SPACE)) movement.y += 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_LEFT_CONTROL)) movement.y -= 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_W)) movement.z += 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_S)) movement.z -= 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_D)) movement.x += 3.0f;
+    if (window.is_key_held(Window::KeyCode::KEY_A)) movement.x -= 3.0f;
 
     rvpt.scene_camera.move(static_cast<float>(frameDelta) * movement);
 
@@ -34,8 +34,6 @@ void update_camera(Window& window, RVPT& rvpt)
 
 int main()
 {
-    ImGui::CreateContext();
-
     Window::Settings settings;
     settings.width = 1024;
     settings.height = 512;
@@ -49,12 +47,39 @@ int main()
         std::cout << "failed to initialize RVPT\n";
         return 0;
     }
+    window.setup_imgui();
+    window.add_mouse_move_callback([&window, &rvpt](double x, double y) {
+        if (window.is_mouse_locked_to_window())
+        {
+            rvpt.scene_camera.rotate(glm::vec3(x * 0.3f, -y * 0.3f, 0));
+        }
+    });
+
+    window.add_mouse_click_callback([&window](Window::Mouse button, Window::Action action) {
+        if (button == Window::Mouse::LEFT && action == Window::Action::RELEASE &&
+            window.is_mouse_locked_to_window())
+        {
+            window.set_mouse_window_lock(false);
+        }
+        else if (button == Window::Mouse::LEFT && action == Window::Action::RELEASE &&
+                 !window.is_mouse_locked_to_window())
+        {
+            if (!ImGui::GetIO().WantCaptureMouse)
+            {
+                window.set_mouse_window_lock(true);
+            }
+        }
+    });
     while (!window.should_close())
     {
         window.poll_events();
         if (window.is_key_down(Window::KeyCode::KEY_ESCAPE)) window.set_close();
         if (window.is_key_down(Window::KeyCode::KEY_R)) rvpt.reload_shaders();
         if (window.is_key_down(Window::KeyCode::KEY_V)) rvpt.toggle_debug();
+        if (window.is_key_up(Window::KeyCode::KEY_ENTER))
+        {
+            window.set_mouse_window_lock(!window.is_mouse_locked_to_window());
+        }
 
         update_camera(window, rvpt);
         ImGui::NewFrame();

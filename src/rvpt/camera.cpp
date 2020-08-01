@@ -12,6 +12,7 @@
 
 constexpr glm::vec3 RIGHT = glm::vec3(1, 0, 0);
 constexpr glm::vec3 UP = glm::vec3(0, 1, 0);
+constexpr glm::vec3 FORWARD = glm::vec3(0, 0, 1);
 
 glm::mat4 construct_camera_matrix(glm::vec3 translation, glm::vec3 rotation)
 {
@@ -19,6 +20,7 @@ glm::mat4 construct_camera_matrix(glm::vec3 translation, glm::vec3 rotation)
     mat = glm::translate(mat, translation);
     mat = glm::rotate(mat, glm::radians(rotation.x), UP);
     mat = glm::rotate(mat, glm::radians(rotation.y), RIGHT);
+    mat = glm::rotate(mat, glm::radians(rotation.z), FORWARD);
     return mat;
 }
 
@@ -30,20 +32,25 @@ void Camera::move(glm::vec3 translation)
     this->translation += glm::vec3(translation_mat * glm::vec4(translation, 0));
 }
 
-void Camera::rotate(glm::vec3 rotation) { this->rotation += rotation; }
+void Camera::rotate(glm::vec3 rotation)
+{
+    this->rotation += rotation;
+    if (vertical_view_angle_clamp) this->rotation.y = glm::clamp(this->rotation.y, -90.f, 90.f);
+}
 void Camera::set_fov(float in_fov) { fov = in_fov; }
+
+void Camera::clamp_vertical_view_angle(bool clamp) { vertical_view_angle_clamp = clamp; }
 
 void Camera::recalculate_values()
 {
     float theta = glm::radians(fov);
     float view_height = tanf(theta / 2);
     float view_width = aspect * view_height;
-    displacement = glm::vec2(view_width, view_height);
 
     camera_matrix = construct_camera_matrix(this->translation, this->rotation);
 
     view_matrix = glm::inverse(camera_matrix);
-    //glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.f)
+
     pv_matrix = glm::perspectiveLH_ZO(glm::radians(fov), aspect, 0.1f, 1000.f) * view_matrix;
 }
 
@@ -51,7 +58,6 @@ std::vector<glm::vec4> Camera::get_data()
 {
     recalculate_values();
     std::vector<glm::vec4> data;
-    data.emplace_back(displacement, 0, 0);
     data.emplace_back(camera_matrix[0]);
     data.emplace_back(camera_matrix[1]);
     data.emplace_back(camera_matrix[2]);
@@ -82,8 +88,8 @@ glm::mat4 Camera::get_pv_matrix()
 void Camera::update_imgui()
 {
     static bool is_active = true;
-    ImGui::SetNextWindowPos({0, 205}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({200, 215}, ImGuiCond_Once);
+    ImGui::SetNextWindowPos({0, 270}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 240}, ImGuiCond_Once);
 
     if (ImGui::Begin("Camera Data", &is_active))
     {
@@ -106,6 +112,10 @@ void Camera::update_imgui()
         if (ImGui::Button("Rot"))
         {
             rotation = {};
+        }
+        if (ImGui::RadioButton("Clamp Vertical Rot", vertical_view_angle_clamp))
+        {
+            vertical_view_angle_clamp = !vertical_view_angle_clamp;
         }
     }
     ImGui::End();
