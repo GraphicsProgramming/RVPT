@@ -10,6 +10,8 @@
 #include <nlohmann/json.hpp>
 #include <imgui.h>
 
+#include "imgui_helpers.h"
+
 constexpr int RenderModesCount = IM_ARRAYSIZE(RenderModes);
 
 struct DebugVertex
@@ -18,12 +20,23 @@ struct DebugVertex
     glm::vec3 norm;
 };
 
+bool operator==(RVPT::RenderSettings const& left, RVPT::RenderSettings const& right)
+{
+    return glm::equal(left.split_ratio, right.split_ratio) == glm::bvec2(true, true) &&
+           left.top_left_render_mode == right.top_left_render_mode &&
+           left.top_right_render_mode == right.top_right_render_mode &&
+           left.bottom_left_render_mode == right.bottom_left_render_mode &&
+           left.bottom_right_render_mode == right.bottom_right_render_mode;
+}
+
 RVPT::RVPT(Window& window)
     : window_ref(window),
       scene_camera(window.get_aspect_ratio()),
       random_generator(std::random_device{}()),
       distribution(0.0f, 1.0f)
 {
+    ImGui::CreateContext();
+
     std::ifstream input("project_configuration.json");
     nlohmann::json json;
     input >> json;
@@ -34,12 +47,13 @@ RVPT::RVPT(Window& window)
 
     random_numbers.resize(20480);
 
-    materials.emplace_back(glm::vec4(0.3,0.7,0.1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.3, 0.7, 0.1, 0), glm::vec4(0, 0, 0, 0),
+                           Material::Type::LAMBERT);
     spheres.emplace_back(glm::vec3(0, -101, 0), 100.f, 0);
 
-    materials.emplace_back(glm::vec4(1.0,1.0,1.0, 1.5), glm::vec4(0,0,0, 0),
+    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 1.5), glm::vec4(0, 0, 0, 0),
                            Material::Type::DIELECTRIC);
-    materials.emplace_back(glm::vec4(1.0,1.0,1.0, 1.0/1.5), glm::vec4(0,0,0, 0),
+    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 1.0 / 1.5), glm::vec4(0, 0, 0, 0),
                            Material::Type::DIELECTRIC);
     spheres.emplace_back(glm::vec3(0, 1.5, 0), 1.0f, 1);
 
@@ -51,14 +65,10 @@ RVPT::RVPT(Window& window)
     triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5);
     triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 6);
 
-    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0),
-                           Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0),
-                           Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0),
-                           Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0),
-                           Material::Type::MIRROR);
+    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::MIRROR);
 }
 
 RVPT::~RVPT() {}
@@ -103,11 +113,13 @@ bool RVPT::initialize()
 }
 bool RVPT::update()
 {
-    bool moved = last_camera_mat != scene_camera.get_camera_matrix();
+    bool moved = last_camera_mat != scene_camera.get_camera_matrix() ||
+                 !(previous_settings == render_settings);
     if (moved)
     {
         render_settings.current_frame = 0;
         last_camera_mat = scene_camera.get_camera_matrix();
+        previous_settings = render_settings;
     }
     else
     {
@@ -177,55 +189,68 @@ void RVPT::update_imgui()
     // imgui back end can't show 2 windows
     static bool show_stats = true;
     ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({200, 205}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 65}, ImGuiCond_Once);
     if (ImGui::Begin("Stats", &show_stats))
     {
-        ImGui::PushItemWidth(80);
         ImGui::Text("Frame Time %.4f", time.average_frame_time());
         ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
+        ImGui::End();
+    }
+    static bool show_render_settings = true;
+    ImGui::SetNextWindowPos({0, 65}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 200}, ImGuiCond_Once);
+    if (ImGui::Begin("Render Settings", &show_stats))
+    {
+        ImGui::PushItemWidth(80);
         ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
         ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
+        if (ImGui::Button("Debug Raster")) toggle_debug();
+        if (ImGui::Button("Wireframe")) toggle_wireframe_debug();
 
-        ImGuiStyle& style = ImGui::GetStyle();
-        float w = ImGui::CalcItemWidth();
-        float spacing = style.ItemInnerSpacing.x;
-        float button_sz = ImGui::GetFrameHeight();
-
-        static const char* current_item_text = RenderModes[render_settings.render_mode];
-
+        static bool horizontal_split = false;
+        static bool vertical_split = false;
+        if (ImGui::Checkbox("Split", &horizontal_split))
+        {
+            render_settings.split_ratio.x = 0.5f;
+        }
+        if (horizontal_split)
+        {
+            ImGui::SameLine();
+            if (ImGui::Checkbox("4-way", &vertical_split)) render_settings.split_ratio.y = 0.5f;
+        }
         ImGui::Text("Render Mode");
-        if (ImGui::ArrowButton("##l", ImGuiDir_Left))
-        {
-            render_settings.render_mode =
-                (render_settings.render_mode - 1 + RenderModesCount) % RenderModesCount;
-            current_item_text = RenderModes[render_settings.render_mode];
-        }
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        if (ImGui::ArrowButton("##r", ImGuiDir_Right))
-        {
-            render_settings.render_mode =
-                (render_settings.render_mode + 1 + RenderModesCount) % RenderModesCount;
-            current_item_text = RenderModes[render_settings.render_mode];
-        }
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        ImGui::PushItemWidth(120);
-        if (ImGui::BeginCombo("##custom combo", current_item_text, ImGuiComboFlags_NoArrowButton))
-        {
-            for (int n = 0; n < IM_ARRAYSIZE(RenderModes); n++)
-            {
-                bool is_selected = (current_item_text == RenderModes[n]);
-                if (ImGui::Selectable(RenderModes[n], is_selected))
-                    current_item_text = RenderModes[n];
-                if (is_selected) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
         ImGui::PushItemWidth(0);
+        dropdown_helper("top_left", render_settings.top_left_render_mode, RenderModesCount,
+                        RenderModes);
+        if (horizontal_split)
+        {
+            dropdown_helper("top_right", render_settings.top_right_render_mode, RenderModesCount,
+                            RenderModes);
+            if (vertical_split)
+            {
+                dropdown_helper("bottom_left", render_settings.bottom_left_render_mode,
+                                RenderModesCount, RenderModes);
+                dropdown_helper("bottom_right", render_settings.bottom_right_render_mode,
+                                RenderModesCount, RenderModes);
+            }
+            ImGui::SliderFloat("X Split", &render_settings.split_ratio.x, 0.f, 1.f);
+            if (vertical_split)
+                ImGui::SliderFloat("Y Split", &render_settings.split_ratio.y, 0.f, 1.f);
+        }
+        if (!vertical_split)
+        {
+            render_settings.bottom_left_render_mode = render_settings.top_left_render_mode;
+            render_settings.bottom_right_render_mode = render_settings.top_right_render_mode;
+        }
+        if (!horizontal_split)
+        {
+            render_settings.top_right_render_mode = render_settings.top_left_render_mode;
+            render_settings.bottom_left_render_mode = render_settings.top_left_render_mode;
+            render_settings.bottom_right_render_mode = render_settings.top_left_render_mode;
+        }
 
-        if (ImGui::Button("Debug Viz")) toggle_debug();
-        if (ImGui::Button("Wireframe Viz")) toggle_wireframe_debug();
+        ImGui::End();
     }
-    ImGui::End();
 
     scene_camera.update_imgui();
 }
@@ -357,7 +382,7 @@ void RVPT::reload_shaders()
 
 void RVPT::toggle_debug() { debug_overlay_enabled = !debug_overlay_enabled; }
 void RVPT::toggle_wireframe_debug() { debug_wireframe_mode = !debug_wireframe_mode; }
-void RVPT::set_raytrace_mode(int mode) { render_settings.render_mode = mode; }
+void RVPT::set_raytrace_mode(int mode) { render_settings.top_left_render_mode = mode; }
 
 // Private functions //
 bool RVPT::context_init()
@@ -765,7 +790,8 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
         vkCmdDraw(cmd_buf, (uint32_t)triangles.size() * 3, 1, 0, 0);
     }
 
-    if (show_imgui){
+    if (show_imgui)
+    {
         imgui_impl->draw(cmd_buf, current_frame_index);
     }
 

@@ -23,17 +23,10 @@
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-static const char* RenderModes[] = {"binary", 
-                                    "color",
-                                    "depth", 
-                                    "normals", 
-                                    "Utah model",
-                                    "ambient occlusion", 
-                                    "Arthur Appel",
-                                    "Turner Whitted",
-                                    "Robert Cook",
-                                    "James Kajiya",
-                                    "John Hart"};
+static const char* RenderModes[] = {"binary",       "color",          "depth",
+                                    "normals",      "Utah model",     "ambient occlusion",
+                                    "Arthur Appel", "Turner Whitted", "Robert Cook",
+                                    "James Kajiya", "John Hart"};
 
 class RVPT
 {
@@ -75,12 +68,18 @@ public:
         int max_bounces = 8;
         int aa = 1;
         uint32_t current_frame = 1;
-        int render_mode = 9;
+        int reserved = 0;
+        int top_left_render_mode = 9;
+        int top_right_render_mode = 9;
+        int bottom_left_render_mode = 9;
+        int bottom_right_render_mode = 9;
+        glm::vec2 split_ratio = glm::vec2(0.5, 0.5);
+
     } render_settings;
 
 private:
     bool show_imgui = true;
-    
+
     // from a callback
     bool framebuffer_resized = false;
 
@@ -102,6 +101,7 @@ private:
     std::vector<Triangle> triangles;
     std::vector<Material> materials;
 
+    RenderSettings previous_settings;
     glm::mat4 last_camera_mat;
 
     struct Context

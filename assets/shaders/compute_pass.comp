@@ -12,20 +12,26 @@
 #include "structs.glsl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(binding = 0) uniform RenderSettings {
+layout(binding = 0) uniform RenderSettings
+{
     int max_bounces;
     int aa;
     uint current_frame;
-    int render_mode; // defined in rvpt.h
-} render_settings;
+    int reserved;
+    int top_left_render_mode;
+    int top_right_render_mode;
+    int bottom_left_render_mode;
+    int bottom_right_render_mode;
+    vec2 split_ratio;
+}
+render_settings;
 layout(binding = 1, rgba8) uniform writeonly image2D result_image;
 layout(binding = 2, rgba8) uniform image2D temporal_image;
 layout(binding = 3) buffer Random { float random_source[]; };
 layout(binding = 4) uniform Camera
 {
-    vec4 displacement;
     mat4 matrix;
-	vec4 params; /* aspect, hfov, 0, 0 */
+    vec4 params; /* aspect, hfov, 0, 0 */
 }
 cam;
 ivec2 dim = imageSize(result_image);
@@ -58,8 +64,8 @@ bool colour(inout Ray ray, inout Record record)
     else
     {
         record.albedo = vec3(0);
-        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5)* 2);
-        //record.emission = vec3(0);
+        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
+        // record.emission = vec3(0);
         record.reflectiveness = 0.0;
         return false;
     }
@@ -140,7 +146,6 @@ Ray get_camera_ray
 
 void main()
 {
-
 	/* 
 		Integrators enumeration:
 		
@@ -152,11 +157,20 @@ void main()
 		5: Kajiya
 		
 	*/
-	const int integrator_idx_left  = render_settings.render_mode;
-	const int integrator_idx_right = (integrator_idx_left + 1)%5;
-	const int camera_idx_left = 0;
-	const int camera_idx_right = 1;
-	const float x_split = 1.1;
+    int integrator_idx = render_settings.top_left_render_mode;
+    vec2 pixel_split = vec2(gl_GlobalInvocationID) / dim;
+    if (pixel_split.y > render_settings.split_ratio.y)
+    {
+        if (pixel_split.x < render_settings.split_ratio.x)
+            integrator_idx = render_settings.bottom_left_render_mode;
+        else
+            integrator_idx = render_settings.bottom_right_render_mode;
+    }
+    else if (pixel_split.x > render_settings.split_ratio.x)
+        integrator_idx = render_settings.top_right_render_mode;
+
+    const int camera_idx_left = 0;
+    const int camera_idx_right = 1;
 
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
@@ -168,18 +182,9 @@ void main()
         vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
 		coord.y = 1.0-coord.y; /* flip image vertically */
         
-		if (coord.x < x_split)
-		{
-			Ray ray = get_camera_ray(camera_idx_left, coord.x, coord.y);
-			sampled += eval_integrator(integrator_idx_left, ray);
-		}
-		else
-		{
-			Ray ray = get_camera_ray(camera_idx_right, coord.x, coord.y);
-			sampled += eval_integrator(integrator_idx_right, ray);			
-		}
-        //sampled += trace(ray);
-    }
+		Ray ray = get_camera_ray(camera_idx_left, coord.x, coord.y);
+		sampled += eval_integrator(integrator_idx, ray);
+	}
 
     float current_frame = float(render_settings.current_frame);
 

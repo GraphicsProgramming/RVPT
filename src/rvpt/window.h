@@ -4,9 +4,9 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 #include <functional>
-#include <unordered_set>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -136,6 +136,7 @@ public:
         KEY_RIGHT_ALT = 346,
         KEY_RIGHT_SUPER = 347,
         KEY_MENU = 348,
+        MAX_KEY = 1024,
     };
 
     enum class Action
@@ -154,6 +155,10 @@ public:
         OTHER
     };
 
+    using MouseClickCallback = std::function<void(Mouse button, Action action)>;
+    using MouseMoveCallback = std::function<void(double x, double y)>;
+    using MouseScrollCallback = std::function<void(double x, double y)>;
+
     struct Settings
     {
         int width = 800;
@@ -167,13 +172,17 @@ public:
     explicit Window(Settings settings);
     ~Window();
 
+    void setup_imgui();
+
     float get_aspect_ratio();
-    void add_mouse_click_callback(std::function<void(Mouse button, Action action)> callback);
-    void add_mouse_move_callback(std::function<void(float x, float y)> callback);
-    void add_scroll_callback(std::function<void(float x, float y)> callback);
+    void add_mouse_click_callback(MouseClickCallback callback);
+    void add_mouse_move_callback(MouseMoveCallback callback);
+    void add_scroll_callback(MouseScrollCallback callback);
     void poll_events();
 
-    bool is_key_down(KeyCode code);
+    bool is_key_down(KeyCode keycode);
+    bool is_key_up(KeyCode keycode);
+    bool is_key_held(KeyCode keycode);
 
     Settings get_settings();
     GLFWwindow* get_window_pointer();
@@ -181,14 +190,34 @@ public:
     bool should_close();
     void set_close();
 
-private:
-    std::unordered_set<int> keys_down;
+    bool is_mouse_locked_to_window();
+    void set_mouse_window_lock(bool locked);
 
-    std::vector<std::function<void(Mouse button, Action action)>> mouse_click_callbacks;
-    std::vector<std::function<void(float x, float y)>> mouse_move_callbacks;
-    std::vector<std::function<void(float x, float y)>> scroll_callbacks;
+private:
     Settings active_settings;
     GLFWwindow* window_ptr;
+
+    enum class KeyState
+    {
+        none,     // no input
+        pressed,  // set on frame key is pressed
+        held,     // set on frame after key is pressed while not released
+        repeat,   // equivalent to held but OS triggered
+        released  // set on frame key is released, cleared after one frame
+    };
+
+    std::array<KeyState, static_cast<size_t>(KeyCode::MAX_KEY)> key_states;
+
+    std::vector<MouseClickCallback> mouse_click_callbacks;
+    std::vector<MouseMoveCallback> mouse_move_callbacks;
+    std::vector<MouseScrollCallback> scroll_callbacks;
+
+    double mouse_position_x{}, mouse_position_y{};
+    double mouse_position_previous_x{}, mouse_position_previous_y{};
+    double mouse_change_in_previous_x{}, mouse_change_in_previous_y{};
+
+    bool mouse_locked_to_window = true;
+    double last_mouse_position_x{}, last_mouse_position_y{};
 
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void mouse_click_callback(GLFWwindow* window, int button, int action, int mods);
