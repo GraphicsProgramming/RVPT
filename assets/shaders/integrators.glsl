@@ -153,7 +153,7 @@ vec3 integrator_Kajiya
 	
 	vec3 col = vec3(0);
 	vec3 throughput = vec3(1);
-	vec3 background = vec3(0.3);
+	vec3 background;
 	
 	for (int i=0; i<nbounce; ++i)
 	{

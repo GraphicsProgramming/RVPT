@@ -8,6 +8,7 @@
 /*                                                                          */
 /*--------------------------------------------------------------------------*/
 
+
 /*--------------------------------------------------------------------------*/
 
 vec3 handwritten_reflect
@@ -94,6 +95,29 @@ vec3 mat_scatter_Lambert_cos
     
 } /* mat_scatter_Lambert_cos */
 
+
+
+/*--------------------------------------------------------------------------*/
+
+vec3 mat_eval_Lambert
+
+	(vec3 diffuse)
+	
+{
+	return diffuse * PI;
+}
+
+/*--------------------------------------------------------------------------*/
+
+vec3 mat_scatter_Lambert
+
+	(vec3 normal)
+	 
+{
+	vec3 dir = map_cosine_hemisphere_simple (rand(), rand(), normal);
+	return dir;
+}
+
 /*--------------------------------------------------------------------------*/
 
 vec3 mat_eval_mirror
@@ -113,6 +137,7 @@ vec3 mat_eval_mirror
 /*--------------------------------------------------------------------------*/
 
 vec3 mat_scatter_mirror
+
 
 	(vec3 dir_in,  /* incident direction (dot(dir_in, normal)<=0) */
 	 vec3 normal)  /* unit normal */
@@ -211,6 +236,7 @@ vec3 handle_material
 	case 2: /* dielectric */
         dir_out = mat_scatter_dielectric(dir_in, normal, 1.5);
 		return mat_eval_dielectric(mat.base_color);
+
 	default:
 		dir_out = vec3(0);
 		return vec3(0.0);
@@ -218,6 +244,7 @@ vec3 handle_material
 }
 
 /*--------------------------------------------------------------------------*/
+
 
 /*--------------------------------------------------------------------------*/
 /*                                                                          */
@@ -386,7 +413,6 @@ vec3 handle_material
 */
 
 /*--------------------------------------------------------------------------*/
-
 
 void apply_record(inout Ray ray, inout Record record)
 {

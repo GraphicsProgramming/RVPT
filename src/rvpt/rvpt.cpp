@@ -46,7 +46,6 @@ RVPT::RVPT(Window& window)
     spheres.emplace_back(glm::vec3(0, 1, 5), 0.5f, 1);
     spheres.emplace_back(glm::vec3(0, 1, 5), 0.45f, 2);
 
-
     triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 3);
     triangles.emplace_back(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 4);
     triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5);
