@@ -23,7 +23,17 @@
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-static const char* RenderModes[] = {"binary", "depth", "normals", "ambient occlusion", "Kajiya"};
+static const char* RenderModes[] = {"binary", 
+                                    "color",
+                                    "depth", 
+                                    "normals", 
+                                    "Utah model",
+                                    "ambient occlusion", 
+                                    "Arthur Appel",
+                                    "Turner Whitted",
+                                    "Robert Cook",
+                                    "James Kajiya",
+                                    "John Hart"};
 
 class RVPT
 {
@@ -65,7 +75,7 @@ public:
         int max_bounces = 8;
         int aa = 1;
         uint32_t current_frame = 1;
-        int render_mode = 4;
+        int render_mode = 9;
     } render_settings;
 
 private:
