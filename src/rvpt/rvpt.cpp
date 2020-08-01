@@ -34,24 +34,31 @@ RVPT::RVPT(Window& window)
 
     random_numbers.resize(20480);
 
-    spheres.emplace_back(glm::vec3(0, -10001, 0), 10000.f, 0);
-    materials.emplace_back(glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.3,0.7,0.1, 0), glm::vec4(0, 0, 0, 0), Material::Type::LAMBERT);
+    spheres.emplace_back(glm::vec3(0, -101, 0), 100.f, 0);
 
-    spheres.emplace_back(glm::vec3(0, 1, 2), 1.f, 1);
-    materials.emplace_back(glm::vec4(0, 0, 0, 0), glm::vec4(.7, .7, .7, 0),
-                           Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(1.0,1.0,1.0, 1.5), glm::vec4(0,0,0, 0),
+                           Material::Type::DIELECTRIC);
+    materials.emplace_back(glm::vec4(1.0,1.0,1.0, 1.0/1.5), glm::vec4(0,0,0, 0),
+                           Material::Type::DIELECTRIC);
+    spheres.emplace_back(glm::vec3(0, 1.5, 0), 1.0f, 1);
 
-    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 2);
-    triangles.emplace_back(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 3);
-    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 4);
-    triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 3);
+    spheres.emplace_back(glm::vec3(0, 1, 5), 0.5f, 1);
+    spheres.emplace_back(glm::vec3(0, 1, 5), 0.45f, 2);
 
-    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
-                           Material::Type::GLASS);
-    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(.1, .1, .1, 0),
+    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 3);
+    triangles.emplace_back(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 4);
+    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5);
+    triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 6);
+
+    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0),
                            Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(.1, .1, .1, 0),
+    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0),
                            Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0),
+                           Material::Type::LAMBERT);
+    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0),
+                           Material::Type::MIRROR);
 }
 
 RVPT::~RVPT() {}

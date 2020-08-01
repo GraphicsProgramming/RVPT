@@ -39,6 +39,7 @@ struct Material_new
 	int  type; /* 0: diffuse, 1: perfect mirror */
 	vec3 base_color;
 	vec3 emissive;
+    float ior;
 };
 
 Material_new convert_old_material
@@ -48,8 +49,9 @@ Material_new convert_old_material
 {
 	Material_new res;
 	res.type = int(mat.data.x);
-	res.base_color = mat.albedo.xyz/PI;
+	res.base_color = mat.albedo.xyz;
 	res.emissive = mat.emission.xyz;
+    res.ior = mat.albedo.w;
 	
 	return res;
 }
@@ -480,10 +482,17 @@ bool intersect_scene
 		
 		/* inverse transform on the ray, needs to be changed to 3x3/4x4 mat */
 		Ray temp_ray;
-		temp_ray.origin = (ray.origin - sphere.origin)/sphere.radius;
+		temp_ray.origin = (ray.origin - sphere.origin) / sphere.radius;
 		temp_ray.direction = ray.direction / sphere.radius;
 		
-		intersect_sphere(temp_ray, mint, closest_t, temp_isect);
+        /*
+            g(x) = 0, x \in S
+            M(x) \in M(S) -> g(M^{-1}(x)) = 0 -> x \in S
+            
+        */
+        
+		//intersect_sphere(temp_ray, mint, closest_t, temp_isect);
+        intersect_sphere(temp_ray, mint, closest_t, temp_isect);
 		if (temp_isect.t<closest_t)
 		{
 			info = temp_isect;
@@ -514,14 +523,8 @@ bool intersect_scene
 	}
 	
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
-	
-	/* flip normal to face the direction where the ray came from */
-	info.normal = dot(ray.direction, info.normal) < 0 ? 
-					info.normal : -info.normal;
 					
-	/* offset intersection along the normal to avoid self-intersection */
-	info.pos = closest_t < INF? 
-		ray.origin + info.t * ray.direction + EPSILON*info.normal : vec3(0);
+	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
 	
 	return closest_t<INF;
 	
