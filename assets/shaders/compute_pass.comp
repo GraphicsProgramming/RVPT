@@ -4,7 +4,7 @@
 
 #define PI 3.1415926535897932384626433832795
 #define RAY_MIN_DIST 0.01
-#define EPSILON 0.01
+#define EPSILON 0.005
 #define INF 1.0/0.0
 
 #include "structs.glsl"
@@ -27,6 +27,7 @@ layout(binding = 4) uniform Camera
 }
 cam;
 ivec2 dim = imageSize(result_image);
+uint iframe = render_settings.current_frame;
 
 layout(std430, binding = 5) buffer Spheres { Sphere spheres[]; };
 layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
@@ -139,7 +140,7 @@ void main()
 	const int integrator_idx_right = (integrator_idx_left + 1)%5;
 	const int camera_idx_left = 0;
 	const int camera_idx_right = 1;
-	const float x_split = 0.5;
+	const float x_split = 1.1;
 
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *

@@ -6,10 +6,10 @@
 
 struct Sphere
 {
-    explicit Sphere(glm::vec3 orig, float radiu, int mat_id){
+    explicit Sphere(glm::vec3 orig, float radius, int mat_id){
         // No these aren't typos, I just couldn't think of anything else to name them...
         origin = orig;
-        radius = radiu;
+        this->radius = radius;
         material_id = glm::vec4(mat_id, 0, 0, 0);
     }
     glm::vec3 origin;
