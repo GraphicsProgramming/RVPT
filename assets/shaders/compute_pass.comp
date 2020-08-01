@@ -5,6 +5,8 @@
 #define PI 3.1415926535897932384626433832795
 #define RAY_MIN_DIST 0.01
 #define EPSILON 0.005
+#define MARCH_ITER 32
+#define MARCH_EPS 0.1
 #define INF 1.0/0.0
 
 #include "structs.glsl"
@@ -37,6 +39,7 @@ layout(std430, binding = 7) buffer Materials { Material materials[]; };
 #include "camera.glsl"
 #include "samples_mapping.glsl"
 #include "intersection.glsl"
+#include "distance_functions.glsl"
 #include "material.glsl"
 #include "integrators.glsl"
 
@@ -92,14 +95,26 @@ vec3 eval_integrator
 	{
 	case 0:
 		return integrator_binary(ray, 0, INF);
-	case 1:
-		return integrator_depth(ray, 0, INF);
+    case 1:
+		return integrator_color(ray, 0, INF);
 	case 2:
-		return integrator_normal(ray, 0, INF);
+		return integrator_depth(ray, 0, INF);
 	case 3:
+		return integrator_normal(ray, 0, INF);
+    case 4:
+        return integrator_Utah(ray, 0, INF);
+	case 5:
 		return integrator_ao(ray, 0, INF, render_settings.max_bounces);
-	default:
+    case 6:
+        return integrator_Appel(ray, 0, INF);
+    case 7:
+        return integrator_Whitted(ray, 0, INF, render_settings.max_bounces);    
+    case 8:
+        return integrator_Cook(ray, 0, INF, render_settings.max_bounces);
+	case 9:
 		return integrator_Kajiya(ray, 0, INF, render_settings.max_bounces);
+    default:
+        return integrator_Hart(ray, 0, INF);
 	}
 }
 
@@ -133,7 +148,8 @@ void main()
 		1: depth
 		2: normal
 		3: ao
-		4: Kajiya
+        4: Appel
+		5: Kajiya
 		
 	*/
 	const int integrator_idx_left  = render_settings.render_mode;

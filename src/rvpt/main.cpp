@@ -24,10 +24,11 @@ void update_camera(Window& window, RVPT& rvpt)
     rvpt.scene_camera.move(static_cast<float>(frameDelta) * movement);
 
     glm::vec3 rotation{};
-    if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rotation.x = 1.f;
-    if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rotation.x = -1.f;
-    if (window.is_key_down(Window::KeyCode::KEY_UP)) rotation.y = -1.f;
-    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rotation.y = 1.f;
+    float rot_speed = 0.3f;
+    if (window.is_key_down(Window::KeyCode::KEY_RIGHT)) rotation.x = rot_speed;
+    if (window.is_key_down(Window::KeyCode::KEY_LEFT)) rotation.x = -rot_speed;
+    if (window.is_key_down(Window::KeyCode::KEY_UP)) rotation.y = -rot_speed;
+    if (window.is_key_down(Window::KeyCode::KEY_DOWN)) rotation.y = rot_speed;
     rvpt.scene_camera.rotate(rotation);
 }
 
