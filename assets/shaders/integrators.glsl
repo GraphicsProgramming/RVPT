@@ -14,13 +14,9 @@
 	TODO:
 	
 	- Add rasterizer-like integrator.
-	- Add Appel integrator.
-	- Add Whitted integrator.
-	- Add Kajiya integrator.
-	- Add albedo integrator.
 	- Add specific bounce integrator.
 	- Add Cook integrator?
-	- Add Hart integrator?
+    - Add heat map LUT for Hart.
 */
 
 /*--------------------------------------------------------------------------*/
@@ -43,6 +39,27 @@ vec3 integrator_binary
 
 /*--------------------------------------------------------------------------*/
 
+vec3 integrator_color
+
+	(Ray   ray,      /* primary ray */
+	 float mint,     /* lower bound for t */
+	 float maxt)     /* upper bound for t */
+	 
+/*
+	Returns the base color of the intersected surface, otherwise (0,0,0).
+*/
+	 
+{
+    Isect info;
+    if (!intersect_scene(ray, mint, maxt, info))
+        return vec3(0);
+    else
+        return info.mat.base_color;
+
+} /* integrator_color */
+
+/*--------------------------------------------------------------------------*/
+
 vec3 integrator_depth
 
 	(Ray   ray,      /* primary ray */
@@ -50,7 +67,7 @@ vec3 integrator_depth
 	 float maxt)     /* upper bound for t */
 	 
 /*
-	Returns the reciprocal distance to the intersection 
+	Returns the reciprocal distance to the intersection, measured
 	from the primary ray's origin.
 */
 	 
@@ -86,6 +103,52 @@ vec3 integrator_normal
 
 /*--------------------------------------------------------------------------*/
 
+vec3 integrator_Utah
+
+	(Ray   ray,      /* primary ray */
+	 float mint,     /* lower bound for t */
+	 float maxt)     /* upper bound for t */
+     
+/*
+    A rasterizer-like integrator, ignores shadows. 
+    Based on the "Utah model":
+    
+    The Rendering Equation, James Kajiya, 1986    
+*/    
+    
+{
+    vec3 light_intensity = vec3(1.0);
+    vec3 light_dir = normalize(vec3(0.5,1,0.3));
+    vec3 ambient = vec3(0.1);
+    
+	Isect info;
+	
+	vec3 col = ambient;
+    vec3 white = vec3(1);
+    vec3 blue = vec3(0.2,0.3,0.7);
+
+    /* intersected nothing -> background */
+    if (!intersect_scene (ray, mint, maxt, info))
+        return mix(white, blue, ray.direction.y);
+    
+     
+    /* intersected an object -> add emission */
+    col += info.mat.emissive;
+        
+    /* intersection data */
+    vec3 normal = info.normal;
+    
+    /* choose the visible normal */
+    normal = dot(ray.direction, normal) < 0.0 ? normal : -normal;
+
+    /* Lambert's law, directional light */
+    float cos_light = max(0,dot(light_dir, normal));    
+    return col+info.mat.base_color * light_intensity * cos_light;
+           
+} /* integrator_Utah */
+
+/*--------------------------------------------------------------------------*/
+
 vec3 integrator_ao
 
 	(Ray   ray,      /* primary ray */
@@ -101,6 +164,8 @@ vec3 integrator_ao
 	where H is the hemisphere centered around the normal at 
 	x, and the visibility function V is implicitly bounded by 
 	(mint, maxt).
+    
+    For further details see: https://en.wikipedia.org/wiki/Ambient_occlusion
 */ 
 	
 {
@@ -108,17 +173,23 @@ vec3 integrator_ao
 	bool isect = intersect_scene (ray, mint, maxt, info);
 	if (!isect) return vec3(0);
 	
+    /* intersection data */
+    vec3 normal = info.normal;
+    
+    /* choose the visible normal */
+    normal = dot(ray.direction, normal) < 0.0 ? normal : -normal;   
+    
 	/* shoot several rays to estimate the occlusion integral */
 	float acc = 0.0;
 	for (int i=0; i<nrays; ++i)
 	{
 		Ray new_ray;
-		new_ray.origin = info.pos;
+		new_ray.origin = info.pos + EPSILON * normal;
 		float u = rand();
 		float v = rand();
 		
 		/* diffuse scattering, pdf cancels out \cos\theta / \pi factor */
-		new_ray.direction = map_cosine_hemisphere_simple(u,v,info.normal);
+		new_ray.direction = map_cosine_hemisphere_simple(u,v,normal);
 		
 		/* accumulate occlusion */
 		acc += float(intersect_scene_any(new_ray, mint, maxt));
@@ -130,12 +201,344 @@ vec3 integrator_ao
 
 /*--------------------------------------------------------------------------*/
 
-vec3 integrator_Kajiya
+vec3 integrator_Appel
 
 	(Ray   ray,      /* primary ray */
 	 float mint,     /* lower bound for t */
+	 float maxt)     /* upper bound for t */
+    
+/*
+    A simplistic integrator considering only a directional 
+    light source and diffuse materials. Based on:
+    
+    Some techniques for shading machine renderings of solids, 
+    Arthur Appel, 1968
+*/  
+  
+    
+{
+    vec3 light_intensity = vec3(1.0);
+    vec3 light_dir = normalize(vec3(0.5,1,0.3));
+    
+    Isect info;
+    if (!intersect_scene (ray, mint, maxt, info))
+        return vec3(1);
+    else
+    {
+        vec3 dir_in = normalize(ray.direction);
+        float cos_view = dot(dir_in, info.normal);
+        
+        /* the "correct" normal is the one that we see */
+        vec3 normal = cos_view > 0.0 ? -info.normal : info.normal;
+        
+        Ray shadow_ray;
+        /* offset to avoid self-intersection */
+        shadow_ray.origin = info.pos+EPSILON*normal;
+        shadow_ray.direction = light_dir;
+        
+        /* check visibility to light */
+        if (intersect_scene_any(shadow_ray, 0, INF))
+            return vec3(0);
+        else
+        {
+            /* Lambert's law, directional light */
+            float cos_light = max(0,dot(light_dir, normal));
+            return light_intensity * cos_light;
+        }
+    }
+    
+} /* integrator_Appel */
+
+/*--------------------------------------------------------------------------*/
+
+vec3 integrator_Whitted
+
+	(Ray   primary_ray, /* primary ray */
+	 float mint,     /* lower bound for t */
 	 float maxt,     /* upper bound for t */
 	 int   nbounce)  /* max # of bounces */
+  
+/*
+    An integrator that supports the Lambert brdf, 
+    as well as deterministic reflection and refraction.
+    Based on:
+    
+    An Improved Illumination Model for Shaded Display, 
+    Turner Whitted, 1979
+    
+    Remark:
+    The integrator is modified compared to the original 
+    paper in order to avoid the exponential explosion of 
+    rays. At each bounce, whether reflection/refraction 
+    should be chosen is random.
+*/
+  
+{
+    vec3 light_intensity = vec3(1.0);
+    vec3 light_dir = normalize(vec3(0.5,1,0.3));
+    vec3 ambient = vec3(0.1);
+    
+	Ray ray = primary_ray;
+	Isect info;
+	
+	vec3 col = ambient;
+	vec3 throughput = vec3(1);
+    vec3 white = vec3(1);
+    vec3 blue = vec3(0.2,0.3,0.7);
+	
+	for (int i=0; i<nbounce; ++i)
+	{
+	
+        /* intersected nothing -> background */
+        if (!intersect_scene (ray, mint, maxt, info))
+            return col + throughput*mix(white, blue, ray.direction.y);
+        
+        /* intersected an object -> add emission */
+        col += throughput*info.mat.emissive;
+        
+        /* intersection data */
+        vec3 pos = info.pos;
+        vec3 normal = info.normal;
+        vec3 dir_in = normalize(ray.direction);
+        vec3 pos_out;
+        vec3 dir_out;
+        
+        /* cos angle with the normal */
+        float cos_view = dot(dir_in, normal);
+        /* the absolute value of the cosine */
+        float cos_in;
+        /* whether the normal needs to be flipped */
+        bool flipped_normal = cos_view > 0.0;
+        /* indices of refraction (ior) on the inside */
+        float eta = info.mat.ior;
+        /* ray arrives from the "inside" */
+        if (flipped_normal)
+        {
+            /* cos_theta > 0 */
+            cos_in = cos_view;
+            /* flip normal */
+            normal = -normal;
+        }
+        else /* ray arrives from the outside */
+        {
+            cos_in = -cos_view; /* cos_theta <= 0 */
+            /* flip ior ratio, assume outside is always air (1.0) */
+            eta = 1.0/eta;
+        }
+        
+        /* Handle different materials */
+        switch (info.mat.type)
+        {
+        case 0: /* direct Lambert */   
+            /* check light visibility */
+            Ray shadow_ray;
+            /* offset to avoid self-intersection */
+            shadow_ray.origin = pos + EPSILON * normal;
+            shadow_ray.direction = light_dir;
+            
+            /* check visibility to light */
+            if (intersect_scene_any(shadow_ray, 0, INF))
+                return col;
+            else
+            {
+                /* Lambert's law, directional light */
+                float cos_light = max(0,dot(light_dir, normal));    
+                return col+throughput * info.mat.base_color * 
+                       light_intensity * cos_light;
+            }
+            break;
+            
+        case 1: /* perfect mirror */
+            /* offset to upper hemisphere to avoid self-intersection */
+            pos_out = pos + EPSILON * normal;
+            /* reflect */
+            dir_out = dir_in + 2*cos_in*normal;
+            throughput *= mat_eval_mirror(info.mat.base_color);    
+            break;
+            
+        case 2: /* dielectric */
+        {
+            float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
+            /* refraction cosine */
+            float cos_out = sqrt(max(0,cos_out_sqr));
+            /* Fresnel reflectance */
+            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
+            /* total internal reflection or Fresnel reflectance */
+            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+            
+            if (refl)
+            {
+                /* upper hemisphere offset */
+                pos_out = pos + EPSILON * normal;       
+                /* reflection */
+                dir_out = dir_in + 2*cos_in*normal;
+            }
+            else
+            {
+                /* lower hemisphere offset */
+                pos_out = pos - EPSILON * normal;
+                /* refraction, cos_in = -dot(d,n) */
+                dir_out = eta*dir_in + (eta*cos_in-cos_out)*normal;
+            }
+            throughput *= mat_eval_dielectric(info.mat.base_color);   
+            break;
+        }
+        default:
+            return vec3(0);
+        }
+        
+        /* prepare next ray */
+        ray = Ray(pos_out, dir_out);
+	}
+	
+	/* return black if it runs out of iterations */
+	return vec3(0);
+  
+} /* integrator_Whitted */
+
+/*--------------------------------------------------------------------------*/
+
+vec3 integrator_Cook
+
+	(Ray   primary_ray, /* primary ray */
+	 float mint,        /* lower bound for t */
+	 float maxt,        /* upper bound for t */
+	 int   nbounce)     /* max # of bounces */
+     
+/*
+    An integrator that does not allow for indirect light 
+    due to non-specular bounces. Based on:
+    
+    Distributed Ray Tracing, Robert Cook, 1984
+*/
+     
+{
+	Ray ray = primary_ray;
+	Isect info;
+	
+	vec3 col = vec3(0);
+	vec3 throughput = vec3(1);
+    vec3 white = vec3(1);
+    vec3 blue = vec3(0.2,0.3,0.7);
+	vec3 background;
+	
+	for (int i=0; i<nbounce; ++i)
+	{
+	
+        /* intersected nothing -> background */
+        if (!intersect_scene (ray, mint, maxt, info))
+            return col + throughput*mix(white, blue, ray.direction.y);
+        
+        /* intersected an object -> add emission */
+        col += throughput*info.mat.emissive;
+        
+        /* intersection data */
+        vec3 pos = info.pos;
+        vec3 normal = info.normal;
+        vec3 dir_in = normalize(ray.direction);
+        vec3 pos_out;
+        vec3 dir_out;
+        
+        /* cos angle with the normal */
+        float cos_view = dot(dir_in, normal);
+        /* the absolute value of the cosine */
+        float cos_in;
+        /* whether the normal needs to be flipped */
+        bool flipped_normal = cos_view > 0.0;
+        /* indices of refraction (ior) on the inside */
+        float eta = info.mat.ior;
+        /* ray arrives from the "inside" */
+        if (flipped_normal)
+        {
+            /* cos_theta > 0 */
+            cos_in = cos_view;
+            /* flip normal */
+            normal = -normal;
+        }
+        else /* ray arrives from the outside */
+        {
+            cos_in = -cos_view; /* cos_theta <= 0 */
+            /* flip ior ratio, assume outside is always air (1.0) */
+            eta = 1.0/eta;
+        }
+        
+        /* Handle different materials */
+        switch (info.mat.type)
+        {
+        case 0: /* Lambert */
+            /* offset to upper hemisphere to avoid self-intersection */
+            pos_out = pos + EPSILON * normal;
+            /* scatter cosine weighted */
+            dir_out = mat_scatter_Lambert_cos(normal);
+            throughput *= mat_eval_Lambert_cos(info.mat.base_color/PI);
+            
+            /* bounce once more */
+            ray = Ray(pos_out, dir_out);
+            /* intersected nothing -> background */
+            if (!intersect_scene (ray, mint, maxt, info))
+                return col + throughput*mix(white, blue, ray.direction.y);
+            else /* intersected an object -> add emission */
+                return col + throughput*info.mat.emissive;
+                
+            break;
+            
+        case 1: /* perfect mirror */
+            /* offset to upper hemisphere to avoid self-intersection */
+            pos_out = pos + EPSILON * normal;
+            /* reflect */
+            dir_out = dir_in + 2*cos_in*normal;
+            throughput *= mat_eval_mirror(info.mat.base_color);    
+            break;
+            
+        case 2: /* dielectric */
+        {
+            float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
+            /* refraction cosine */
+            float cos_out = sqrt(max(0,cos_out_sqr));
+            /* Fresnel reflectance */
+            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
+            
+            /* total internal reflection or Fresnel reflectance */
+            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+            
+            if (refl)
+            {
+                /* upper hemisphere offset */
+                pos_out = pos + EPSILON * normal;       
+                /* reflection */
+                dir_out = dir_in + 2*cos_in*normal;
+            }
+            else
+            {
+                /* lower hemisphere offset */
+                pos_out = pos - EPSILON * normal;
+                /* refraction, cos_in = -dot(d,n) */
+                dir_out = eta*dir_in + (eta*cos_in-cos_out)*normal;
+            }
+            throughput *= mat_eval_dielectric(info.mat.base_color);   
+            break;
+        }
+        default:
+            return vec3(0);
+        }
+        
+        /* prepare next ray */
+        ray = Ray(pos_out, dir_out);
+	}
+	
+	/* return black if it runs out of iterations */
+	return vec3(0); 
+ 
+} /* integrator_Cook */
+
+/*--------------------------------------------------------------------------*/
+
+vec3 integrator_Kajiya
+
+	(Ray   primary_ray, /* primary ray */
+	 float mint,        /* lower bound for t */
+	 float maxt,        /* upper bound for t */
+	 int   nbounce)     /* max # of bounces */
 	 
 /*
 	An integrator based on the rendering equation as described 
@@ -148,19 +551,21 @@ vec3 integrator_Kajiya
 	 
 {
 
-	Ray temp_ray = ray;
+	Ray ray = primary_ray;
 	Isect info;
 	
 	vec3 col = vec3(0);
 	vec3 throughput = vec3(1);
+    vec3 white = vec3(1);
+    vec3 blue = vec3(0.2,0.3,0.7);
 	vec3 background;
 	
 	for (int i=0; i<nbounce; ++i)
 	{
 	
         /* intersected nothing -> background */
-        if (!intersect_scene (temp_ray, mint, maxt, info))
-            return col + throughput*mix(vec3(1),vec3(0.2,0.3,0.7), temp_ray.direction.y);
+        if (!intersect_scene (ray, mint, maxt, info))
+            return col + throughput*mix(white, blue, ray.direction.y);
         
         /* intersected an object -> add emission */
         col += throughput*info.mat.emissive;
@@ -168,28 +573,29 @@ vec3 integrator_Kajiya
         /* intersection data */
         vec3 pos = info.pos;
         vec3 normal = info.normal;
-        vec3 dir_in = normalize(temp_ray.direction);
+        vec3 dir_in = normalize(ray.direction);
+        vec3 pos_out;
         vec3 dir_out;
         
         /* cos angle with the normal */
-        float cos_theta = dot(dir_in, normal);
+        float cos_view = dot(dir_in, normal);
         /* the absolute value of the cosine */
         float cos_in;
         /* whether the normal needs to be flipped */
-        bool flipped_normal = cos_theta > 0.0;
+        bool flipped_normal = cos_view > 0.0;
         /* indices of refraction (ior) on the inside */
         float eta = info.mat.ior;
         /* ray arrives from the "inside" */
         if (flipped_normal)
         {
             /* cos_theta > 0 */
-            cos_in = cos_theta;
+            cos_in = cos_view;
             /* flip normal */
             normal = -normal;
         }
         else /* ray arrives from the outside */
         {
-            cos_in = -cos_theta; /* cos_theta <= 0 */
+            cos_in = -cos_view; /* cos_theta <= 0 */
             /* flip ior ratio, assume outside is always air (1.0) */
             eta = 1.0/eta;
         }
@@ -199,53 +605,44 @@ vec3 integrator_Kajiya
         {
         case 0: /* Lambert */
             /* offset to upper hemisphere to avoid self-intersection */
-            temp_ray.origin = pos + EPSILON * normal;
+            pos_out = pos + EPSILON * normal;
             /* scatter cosine weighted */
-            temp_ray.direction = mat_scatter_Lambert_cos(normal);
+            dir_out = mat_scatter_Lambert_cos(normal);
             throughput *= mat_eval_Lambert_cos(info.mat.base_color/PI);
             break;
             
         case 1: /* perfect mirror */
             /* offset to upper hemisphere to avoid self-intersection */
-            temp_ray.origin = pos + EPSILON * normal;
+            pos_out = pos + EPSILON * normal;
             /* reflect */
-            temp_ray.direction = dir_in + 2*cos_in*normal;
+            dir_out = dir_in + 2*cos_in*normal;
             throughput *= mat_eval_mirror(info.mat.base_color);    
             break;
             
         case 2: /* dielectric */
         {
             float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
-            if (cos_out_sqr<=0) /* total internal reflection */
+            /* refraction cosine */
+            float cos_out = sqrt(max(0,cos_out_sqr));
+            /* Fresnel reflectance */
+            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
+            
+            /* total internal reflection or Fresnel reflectance */
+            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+            
+            if (refl)
             {
                 /* upper hemisphere offset */
-                temp_ray.origin = pos + EPSILON * normal;       
+                pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                temp_ray.direction = dir_in + 2*cos_in*normal;
+                dir_out = dir_in + 2*cos_in*normal;
             }
             else
             {
-                /* refraction cosine */
-                float cos_out = sqrt(max(0,cos_out_sqr));
-                /* Fresnel reflectance */
-                float frefl = frensel_reflectance(cos_in,cos_out,eta);
-                
-                /* reflection due to Fresnel */
-                if (rand() < frefl)
-                {
-                    /* upper hemisphere offset */
-                    temp_ray.origin = pos + EPSILON * normal; 
-                    /* reflection */
-                    temp_ray.direction = dir_in + 2*cos_in*normal;
-                }
-                else /* refraction */
-                {
-                    /* lower hemisphere offset */
-                    temp_ray.origin = pos - EPSILON * normal;
-                    /* refraction, cos_in = -dot(d,n) */
-                    temp_ray.direction = eta*dir_in 
-                                       + (eta*cos_in-cos_out)*normal;
-                }
+                /* lower hemisphere offset */
+                pos_out = pos - EPSILON * normal;
+                /* refraction, cos_in = -dot(d,n) */
+                dir_out = eta*dir_in + (eta*cos_in-cos_out)*normal;
             }
             throughput *= mat_eval_dielectric(info.mat.base_color);   
             break;
@@ -253,7 +650,9 @@ vec3 integrator_Kajiya
         default:
             return vec3(0);
         }
-	
+        
+        /* prepare next ray */
+        ray = Ray(pos_out, dir_out);
 	}
 	
 	/* return black if it runs out of iterations */
@@ -263,13 +662,22 @@ vec3 integrator_Kajiya
 	 
 /*--------------------------------------------------------------------------*/
 
-/* integrator_Utah */
+vec3 integrator_Hart
 
-/* integrator_Appel */
+	(Ray   primary_ray, /* primary ray */
+	 float mint,        /* lower bound for t */
+	 float maxt)        /* upper bound for t */
+     
+{
 
-/* integrator_Whitted */
+    IsectM info;
+    intersect_scene_st(primary_ray, mint, maxt, info);
+    return vec3(float(info.iter) / float(MARCH_ITER-1));
+ 
+} /* integrator_Hart */
 
-/* integrator_Kajiya */
+/*--------------------------------------------------------------------------*/
 
-/* integrator_Hart */
+
+
 
