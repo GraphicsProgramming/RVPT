@@ -276,7 +276,7 @@ private:
 };
 
 VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
-                                std::string const& name);
+                                VkFormat depth_image_format, std::string const& name);
 void destroy_render_pass(VkDevice device, VkRenderPass render_pass);
 struct Framebuffer
 {
@@ -299,16 +299,16 @@ std::vector<uint32_t> load_spirv(std::string const& filename);
 struct GraphicsPipelineDetails
 {
     std::string name;
-    VkPipeline pipeline;
-    VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline{};
+    VkPipelineLayout pipeline_layout{};
 
     std::string vert_shader;
     std::string frag_shader;
     std::vector<uint32_t> spirv_vert_data;
     std::vector<uint32_t> spirv_frag_data;
 
-    VkRenderPass render_pass;
-    VkExtent2D extent;
+    VkRenderPass render_pass{};
+    VkExtent2D extent{};
 
     std::vector<VkVertexInputBindingDescription> binding_desc;
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
@@ -317,6 +317,9 @@ struct GraphicsPipelineDetails
     float line_width = 1.0f;
     VkCullModeFlags cull_mode = VK_CULL_MODE_FRONT_BIT;
     VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    bool enable_depth = false;
+    bool enable_stencil = false;
 };
 
 struct ComputePipelineDetails
@@ -473,8 +476,8 @@ class Image
 public:
     explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
                    VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
-                   VkImageUsageFlags usage, VkImageLayout layout, VkDeviceSize size,
-                   MemoryUsage memory_usage);
+                   VkImageUsageFlags usage, VkImageLayout layout, VkImageAspectFlags aspects,
+                   VkDeviceSize size, MemoryUsage memory_usage);
 
     VkImage get() const { return image.handle; }
     VkDescriptorImageInfo descriptor_info() const;
@@ -539,4 +542,6 @@ void set_image_layout(VkCommandBuffer command_buffer, VkImage image, VkImageLayo
                       VkImageLayout new_image_layout, VkImageSubresourceRange subresource_range,
                       VkPipelineStageFlags src_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                       VkPipelineStageFlags dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+VkFormat get_depth_image_format(VkPhysicalDevice device);
 }  // namespace VK

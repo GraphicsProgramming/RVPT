@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include <array>
 #include <algorithm>
 #include <fstream>
 #include <optional>
@@ -451,7 +452,7 @@ void DescriptorPool::update_descriptor_sets(DescriptorSet const& set,
 // Render Pass
 
 VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
-                                std::string const& name)
+                                VkFormat depth_image_format, std::string const& name)
 {
     VkAttachmentDescription color_attachment{};
     color_attachment.format = swapchain_image_format;
@@ -463,14 +464,27 @@ VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    VkAttachmentReference color_attachment_ref{};
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentDescription depth_attachment{};
+    depth_attachment.format = depth_image_format;
+    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    std::array<VkAttachmentDescription, 2> attach_desc{color_attachment, depth_attachment};
+
+    std::array<VkAttachmentReference, 2> attach_refs{
+        VkAttachmentReference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},           // color
+        VkAttachmentReference{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};  // depth
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
+    subpass.pColorAttachments = &attach_refs[0];
+    subpass.pDepthStencilAttachment = &attach_refs[1];
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -482,8 +496,8 @@ VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format
 
     VkRenderPassCreateInfo render_pass_info{};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = 1;
-    render_pass_info.pAttachments = &color_attachment;
+    render_pass_info.attachmentCount = static_cast<uint32_t>(attach_desc.size());
+    render_pass_info.pAttachments = attach_desc.data();
     render_pass_info.subpassCount = 1;
     render_pass_info.pSubpasses = &subpass;
     render_pass_info.dependencyCount = 1;
@@ -693,6 +707,14 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_info{};
+    depth_stencil_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_info.depthTestEnable = details.enable_depth;
+    depth_stencil_info.depthWriteEnable = details.enable_depth;
+    depth_stencil_info.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_stencil_info.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil_info.stencilTestEnable = details.enable_stencil;
+
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -735,6 +757,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
     create_info.pViewportState = &viewport_state;
     create_info.pRasterizationState = &rasterizer;
     create_info.pMultisampleState = &multisampling;
+    create_info.pDepthStencilState = &depth_stencil_info;
     create_info.pColorBlendState = &color_blending;
     create_info.layout = details.pipeline_layout;
     create_info.renderPass = details.render_pass;
@@ -1003,14 +1026,14 @@ auto create_image(VkDevice device, VkFormat format, VkImageTiling image_tiling, 
     return HandleWrapper(device, image, vkDestroyImage);
 }
 
-auto create_image_view(VkDevice device, VkImage image, VkFormat format)
+auto create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspects)
 {
     VkImageViewCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = image;
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     create_info.format = format;
-    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    create_info.subresourceRange.aspectMask = aspects;
     create_info.subresourceRange.baseMipLevel = 0;
     create_info.subresourceRange.levelCount = 1;
     create_info.subresourceRange.baseArrayLayer = 0;
@@ -1045,12 +1068,12 @@ auto create_sampler(VkDevice device)
 
 Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
              VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
-             VkImageUsageFlags usage, VkImageLayout layout, VkDeviceSize size,
-             MemoryUsage memory_usage)
+             VkImageUsageFlags usage, VkImageLayout layout, VkImageAspectFlags aspects,
+             VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       image(create_image(device, format, tiling, {width, height, 1}, usage)),
       image_allocation(memory.allocate_image(image.handle, size, memory_usage)),
-      image_view(create_image_view(device, image.handle, format)),
+      image_view(create_image_view(device, image.handle, format, aspects)),
       sampler(create_sampler(device)),
       format(format),
       layout(layout),
@@ -1063,7 +1086,7 @@ Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string
     CommandBuffer cmd_buf(device, queue, "image" + name + "_upload_cmd_buf");
     cmd_buf.begin();
     set_image_layout(cmd_buf.get(), image.handle, VK_IMAGE_LAYOUT_UNDEFINED, layout,
-                     {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+                     {aspects, 0, 1, 0, 1});
     cmd_buf.end();
     queue.submit(cmd_buf, fence);
     fence.wait();
@@ -1255,6 +1278,23 @@ void set_image_layout(VkCommandBuffer cmdbuffer, VkImage image, VkImageLayout ol
     // Put barrier inside setup command buffer
     vkCmdPipelineBarrier(cmdbuffer, src_stage_mask, dst_stage_mask, 0, 0, nullptr, 0, nullptr, 1,
                          &image_memory_barrier);
+}
+
+VkFormat get_depth_image_format(VkPhysicalDevice phys_device)
+{
+    std::array<VkFormat, 2> depth_formats{VK_FORMAT_D32_SFLOAT_S8_UINT,
+                                          VK_FORMAT_D24_UNORM_S8_UINT};
+    for (VkFormat format : depth_formats)
+    {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(phys_device, format, &props);
+
+        if ((props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
+        {
+            return format;
+        }
+    }
+    return VK_FORMAT_UNDEFINED;
 }
 
 }  // namespace VK

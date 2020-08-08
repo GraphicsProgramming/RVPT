@@ -113,7 +113,8 @@ auto create_font_texture(VkDevice device, VK::MemoryAllocator& memory_allocator,
     VK::Image font_image(device, memory_allocator, graphics_queue, "imgui_font_image",
                          VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, width, height,
                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, upload_size, VK::MemoryUsage::gpu);
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT,
+                         upload_size, VK::MemoryUsage::gpu);
 
     VK::Buffer upload_buffer(device, memory_allocator, "imgui_font_upload_buffer",
                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, upload_size,
