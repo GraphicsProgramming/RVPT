@@ -16,8 +16,9 @@ constexpr int RenderModesCount = IM_ARRAYSIZE(RenderModes);
 
 struct DebugVertex
 {
-    glm::vec3 pos;
-    glm::vec3 norm;
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec3 color;
 };
 
 bool operator==(RVPT::RenderSettings const& left, RVPT::RenderSettings const& right)
@@ -73,12 +74,6 @@ RVPT::RVPT(Window& window)
 
 RVPT::~RVPT() {}
 
-void RVPT::addRectangle(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, int mat)
-{
-    triangles.emplace_back(a, b, d, mat);
-    triangles.emplace_back(c, a, d, mat);
-}
-
 bool RVPT::initialize()
 {
     bool init = context_init();
@@ -94,15 +89,17 @@ bool RVPT::initialize()
     }
     frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
 
-    fullscreen_tri_render_pass = VK::create_render_pass(vk_device, vkb_swapchain.image_format,
-                                                        "fullscreen_image_copy_render_pass");
+    fullscreen_tri_render_pass = VK::create_render_pass(
+        vk_device, vkb_swapchain.image_format,
+        VK::get_depth_image_format(context.device.physical_device.physical_device),
+        "fullscreen_image_copy_render_pass");
 
     imgui_impl.emplace(vk_device, *graphics_queue, pipeline_builder, memory_allocator,
                        fullscreen_tri_render_pass, vkb_swapchain.extent, MAX_FRAMES_IN_FLIGHT);
 
-    create_framebuffers();
-
     rendering_resources = create_rendering_resources();
+
+    create_framebuffers();
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -148,9 +145,10 @@ bool RVPT::update()
         for (auto& tri : triangles)
         {
             glm::vec3 normal{tri.vertex0.w, tri.vertex1.w, tri.vertex2.w};
-            debug_triangles.push_back({glm::vec3(tri.vertex0), glm::vec3(1.f, 1.f, 0.f)});
-            debug_triangles.push_back({glm::vec3(tri.vertex1), glm::vec3(1.f, 0.f, 1.f)});
-            debug_triangles.push_back({glm::vec3(tri.vertex2), glm::vec3(0.f, 1.f, 1.f)});
+            glm::vec3 color{materials[static_cast<size_t>(tri.material_id.x)].albedo};
+            debug_triangles.push_back({glm::vec3(tri.vertex0), normal, color});
+            debug_triangles.push_back({glm::vec3(tri.vertex1), normal, color});
+            debug_triangles.push_back({glm::vec3(tri.vertex2), normal, color});
         }
         size_t vert_byte_size = debug_triangles.size() * sizeof(DebugVertex);
         if (per_frame_data[current_frame_index].debug_vertex_buffer.size() < vert_byte_size)
@@ -387,9 +385,15 @@ void RVPT::set_raytrace_mode(int mode) { render_settings.top_left_render_mode = 
 // Private functions //
 bool RVPT::context_init()
 {
+#if defined(DEBUG) || defined(_DEBUG)
+    bool use_validation = true;
+#else
+    bool use_validation = false;
+#endif
+
     vkb::InstanceBuilder inst_builder;
     auto inst_ret = inst_builder.set_app_name(window_ref.get_settings().title)
-                        .request_validation_layers()
+                        .request_validation_layers(use_validation)
                         .use_default_debug_messenger()
                         .build();
 
@@ -521,7 +525,8 @@ void RVPT::create_framebuffers()
     framebuffers.clear();
     for (uint32_t i = 0; i < vkb_swapchain.image_count; i++)
     {
-        std::vector<VkImageView> image_views = {swapchain_image_views[i]};
+        std::vector<VkImageView> image_views = {
+            swapchain_image_views[i], rendering_resources->depth_buffer.image_view.handle};
         VK::debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_IMAGE_VIEW,
                                                      swapchain_image_views[i],
                                                      "swapchain_image_view_" + std::to_string(i));
@@ -588,7 +593,11 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc = {
         {0, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 0},
-        {1, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 4}};
+        {1, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 12},
+        {2, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 24}};
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_info{};
+    depth_stencil_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 
     VK::GraphicsPipelineDetails debug_details;
     debug_details.name = "debug_raster_view_pipeline";
@@ -600,16 +609,30 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     debug_details.binding_desc = binding_desc;
     debug_details.attribute_desc = attribute_desc;
     debug_details.cull_mode = VK_CULL_MODE_NONE;
+    debug_details.enable_depth = true;
 
     auto opaque = pipeline_builder.create_pipeline(debug_details);
     debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
     auto wireframe = pipeline_builder.create_pipeline(debug_details);
 
-    auto temporal_storage_image =
-        VK::Image(vk_device, memory_allocator, *graphics_queue, "temporal_storage_image",
-                  VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-                  window_ref.get_settings().width, window_ref.get_settings().height,
-                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+    auto temporal_storage_image = VK::Image(
+        vk_device, memory_allocator, *graphics_queue, "temporal_storage_image",
+        VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width,
+        window_ref.get_settings().height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT,
+        static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                  window_ref.get_settings().height * 4),
+        VK::MemoryUsage::gpu);
+
+    VkFormat depth_format =
+        VK::get_depth_image_format(context.device.physical_device.physical_device);
+
+    auto depth_image =
+        VK::Image(vk_device, memory_allocator, *graphics_queue, "depth_image", depth_format,
+                  VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width,
+                  window_ref.get_settings().height, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
                   static_cast<VkDeviceSize>(window_ref.get_settings().width *
                                             window_ref.get_settings().height * 4),
                   VK::MemoryUsage::gpu);
@@ -624,7 +647,8 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                     debug_pipeline_layout,
                                     opaque,
                                     wireframe,
-                                    std::move(temporal_storage_image)};
+                                    std::move(temporal_storage_image),
+                                    std::move(depth_image)};
 }
 
 void RVPT::add_per_frame_data(int index)
@@ -632,14 +656,15 @@ void RVPT::add_per_frame_data(int index)
     auto settings_uniform = VK::Buffer(
         vk_device, memory_allocator, "settings_buffer_" + std::to_string(index),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RenderSettings), VK::MemoryUsage::cpu_to_gpu);
-    auto output_image = VK::Image(
-        vk_device, memory_allocator, *graphics_queue,
-        "raytrace_output_image_" + std::to_string(index), VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width, window_ref.get_settings().height,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_LAYOUT_GENERAL,
-        static_cast<VkDeviceSize>(window_ref.get_settings().width *
-                                  window_ref.get_settings().height * 4),
-        VK::MemoryUsage::gpu);
+    auto output_image = VK::Image(vk_device, memory_allocator, *graphics_queue,
+                                  "raytrace_output_image_" + std::to_string(index),
+                                  VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+                                  window_ref.get_settings().width, window_ref.get_settings().height,
+                                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                                  VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT,
+                                  static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                                            window_ref.get_settings().height * 4),
+                                  VK::MemoryUsage::gpu);
     auto random_buffer =
         VK::Buffer(vk_device, memory_allocator, "random_data_uniform_" + std::to_string(index),
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -740,16 +765,17 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK::FLAGS_NONE, 0, nullptr, 0,
                          nullptr, 1, &imageMemoryBarrier);
 
-    VkClearValue background_color = {0.0f, 0.0f, 0.0f, 1.0f};
-
     VkRenderPassBeginInfo rp_begin_info{};
     rp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rp_begin_info.renderPass = fullscreen_tri_render_pass;
     rp_begin_info.framebuffer = framebuffers.at(swapchain_image_index).framebuffer.handle;
     rp_begin_info.renderArea.offset = {0, 0};
     rp_begin_info.renderArea.extent = vkb_swapchain.extent;
-    rp_begin_info.clearValueCount = 1;
-    rp_begin_info.pClearValues = &background_color;
+    std::array<VkClearValue, 2> clear_values;
+    clear_values[0] = {0.0f, 0.0f, 0.0f, 1.0f};
+    clear_values[1] = {1.0f, 0};
+    rp_begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
+    rp_begin_info.pClearValues = clear_values.data();
 
     vkCmdBeginRenderPass(cmd_buf, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 

@@ -152,6 +152,7 @@ private:
         VK::GraphicsPipelineHandle debug_wireframe_pipeline;
 
         VK::Image temporal_storage_image;
+        VK::Image depth_buffer;
     };
 
     std::optional<RenderingResources> rendering_resources;
@@ -186,9 +187,6 @@ private:
 
     RenderingResources create_rendering_resources();
     void add_per_frame_data(int index);
-
-    // Todo remove this(PLEASE REMEMBER)
-    void addRectangle(glm::vec3, glm::vec3, glm::vec3, glm::vec3, int mat);
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
     void record_compute_command_buffer();
