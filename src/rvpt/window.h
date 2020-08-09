@@ -220,6 +220,7 @@ private:
     double last_mouse_position_x{}, last_mouse_position_y{};
 
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void char_callback(GLFWwindow* window, uint32_t codepoint);
     static void mouse_click_callback(GLFWwindow* window, int button, int action, int mods);
     static void mouse_move_callback(GLFWwindow* window, double x, double y);
     static void scroll_callback(GLFWwindow* window, double x, double y);

@@ -13,8 +13,6 @@
 
 #include "imgui_helpers.h"
 
-constexpr int RenderModesCount = IM_ARRAYSIZE(RenderModes);
-
 struct DebugVertex
 {
     glm::vec3 position;
@@ -22,13 +20,14 @@ struct DebugVertex
     glm::vec3 color;
 };
 
-bool operator==(RVPT::RenderSettings const& left, RVPT::RenderSettings const& right)
+bool RVPT::PreviousFrameState::operator==(RVPT::PreviousFrameState const& right)
 {
-    return glm::equal(left.split_ratio, right.split_ratio) == glm::bvec2(true, true) &&
-           left.top_left_render_mode == right.top_left_render_mode &&
-           left.top_right_render_mode == right.top_right_render_mode &&
-           left.bottom_left_render_mode == right.bottom_left_render_mode &&
-           left.bottom_right_render_mode == right.bottom_right_render_mode;
+    return glm::equal(settings.split_ratio, right.settings.split_ratio) == glm::bvec2(true, true) &&
+           settings.top_left_render_mode == right.settings.top_left_render_mode &&
+           settings.top_right_render_mode == right.settings.top_right_render_mode &&
+           settings.bottom_left_render_mode == right.settings.bottom_left_render_mode &&
+           settings.bottom_right_render_mode == right.settings.bottom_right_render_mode &&
+           settings.camera_mode == right.settings.camera_mode && camera_data == right.camera_data;
 }
 
 RVPT::RVPT(Window& window)
@@ -111,13 +110,15 @@ bool RVPT::initialize()
 }
 bool RVPT::update()
 {
-    bool moved = last_camera_mat != scene_camera.get_camera_matrix() ||
-                 !(previous_settings == render_settings);
-    if (moved)
+    auto camera_data = scene_camera.get_data();
+
+    render_settings.camera_mode = scene_camera.get_camera_mode();
+
+    if (!(previous_frame_state == RVPT::PreviousFrameState{render_settings, camera_data}))
     {
         render_settings.current_frame = 0;
-        last_camera_mat = scene_camera.get_camera_matrix();
-        previous_settings = render_settings;
+        previous_frame_state.settings = render_settings;
+        previous_frame_state.camera_data = camera_data;
     }
     else
     {
@@ -131,7 +132,7 @@ bool RVPT::update()
 
     per_frame_data[current_frame_index].settings_uniform.copy_to(render_settings);
     per_frame_data[current_frame_index].random_buffer.copy_to(random_numbers);
-    per_frame_data[current_frame_index].camera_uniform.copy_to(scene_camera.get_data());
+    per_frame_data[current_frame_index].camera_uniform.copy_to(camera_data);
 
     float delta = static_cast<float>(time.since_last_frame());
 
@@ -193,17 +194,18 @@ void RVPT::update_imgui()
     {
         ImGui::Text("Frame Time %.4f", time.average_frame_time());
         ImGui::Text("FPS %.2f", 1.0 / time.average_frame_time());
-        ImGui::End();
     }
+    ImGui::End();
     static bool show_render_settings = true;
     ImGui::SetNextWindowPos({0, 65}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({200, 200}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 190}, ImGuiCond_Once);
     if (ImGui::Begin("Render Settings", &show_stats))
     {
         ImGui::PushItemWidth(80);
         ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
         ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
         if (ImGui::Button("Debug Raster")) toggle_debug();
+        ImGui::SameLine();
         if (ImGui::Button("Wireframe")) toggle_wireframe_debug();
 
         static bool horizontal_split = false;
@@ -219,18 +221,16 @@ void RVPT::update_imgui()
         }
         ImGui::Text("Render Mode");
         ImGui::PushItemWidth(0);
-        dropdown_helper("top_left", render_settings.top_left_render_mode, RenderModesCount,
-                        RenderModes);
+        dropdown_helper("top_left", render_settings.top_left_render_mode, RenderModes);
         if (horizontal_split)
         {
-            dropdown_helper("top_right", render_settings.top_right_render_mode, RenderModesCount,
-                            RenderModes);
+            dropdown_helper("top_right", render_settings.top_right_render_mode, RenderModes);
             if (vertical_split)
             {
                 dropdown_helper("bottom_left", render_settings.bottom_left_render_mode,
-                                RenderModesCount, RenderModes);
+                                RenderModes);
                 dropdown_helper("bottom_right", render_settings.bottom_right_render_mode,
-                                RenderModesCount, RenderModes);
+                                RenderModes);
             }
             ImGui::SliderFloat("X Split", &render_settings.split_ratio.x, 0.f, 1.f);
             if (vertical_split)
@@ -247,9 +247,8 @@ void RVPT::update_imgui()
             render_settings.bottom_left_render_mode = render_settings.top_left_render_mode;
             render_settings.bottom_right_render_mode = render_settings.top_left_render_mode;
         }
-
-        ImGui::End();
     }
+    ImGui::End();
 
     scene_camera.update_imgui();
 }

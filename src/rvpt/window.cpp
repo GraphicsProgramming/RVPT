@@ -23,6 +23,7 @@ Window::Window(Window::Settings settings) : active_settings(settings)
     {
         glfwSetWindowUserPointer(window_ptr, this);
         glfwSetKeyCallback(window_ptr, key_callback);
+        glfwSetCharCallback(window_ptr, char_callback);
         glfwSetMouseButtonCallback(window_ptr, mouse_click_callback);
         glfwSetCursorPosCallback(window_ptr, mouse_move_callback);
         glfwSetScrollCallback(window_ptr, scroll_callback);
@@ -157,6 +158,12 @@ void Window::key_callback(GLFWwindow* window, int key, int scancode, int action,
 #else
     io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER];
 #endif
+}
+void Window::char_callback(GLFWwindow* window, uint32_t codepoint)
+{
+    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddInputCharacter(codepoint);
 }
 
 void Window::mouse_click_callback(GLFWwindow* window, int button, int action, int mods)

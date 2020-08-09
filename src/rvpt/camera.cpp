@@ -8,6 +8,8 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <imgui.h>
 
+#include "imgui_helpers.h"
+
 constexpr glm::vec3 RIGHT = glm::vec3(1, 0, 0);
 constexpr glm::vec3 UP = glm::vec3(0, 1, 0);
 constexpr glm::vec3 FORWARD = glm::vec3(0, 0, 1);
@@ -22,7 +24,7 @@ glm::mat4 construct_camera_matrix(glm::vec3 translation, glm::vec3 rotation)
     return mat;
 }
 
-Camera::Camera(float aspect) : fov(90), aspect(aspect) { recalculate_values(); }
+Camera::Camera(float aspect) : aspect(aspect) { recalculate_values(); }
 
 void Camera::move(glm::vec3 translation)
 {
@@ -37,6 +39,16 @@ void Camera::rotate(glm::vec3 rotation)
 }
 void Camera::set_fov(float in_fov) { fov = in_fov; }
 
+float Camera::get_fov() { return fov; }
+
+void Camera::set_scale(float in_scale) { scale = in_scale; }
+
+float Camera::get_scale() { return scale; }
+
+void Camera::set_camera_mode(int in_mode) { mode = in_mode; }
+
+int Camera::get_camera_mode() { return mode; }
+
 void Camera::clamp_vertical_view_angle(bool clamp) { vertical_view_angle_clamp = clamp; }
 
 void Camera::recalculate_values()
@@ -49,7 +61,16 @@ void Camera::recalculate_values()
 
     view_matrix = glm::inverse(camera_matrix);
 
-    pv_matrix = glm::perspectiveLH_ZO(glm::radians(fov), aspect, 0.1f, 1000.f) * view_matrix;
+    if (mode == 0)
+    {
+        pv_matrix = glm::perspectiveLH_ZO(glm::radians(fov), aspect, 0.1f, 1000.f) * view_matrix;
+    }
+    else if (mode == 1)
+    {
+        pv_matrix = glm::orthoLH_ZO(-view_width * scale, view_width * scale, -view_height * scale,
+                                    view_height * scale, 0.1f, 1000.f) *
+                    view_matrix;
+    }
 }
 
 std::vector<glm::vec4> Camera::get_data()
@@ -60,7 +81,7 @@ std::vector<glm::vec4> Camera::get_data()
     data.emplace_back(camera_matrix[1]);
     data.emplace_back(camera_matrix[2]);
     data.emplace_back(camera_matrix[3]);
-    data.emplace_back(aspect, glm::radians(fov), 0, 0);
+    data.emplace_back(aspect, glm::radians(fov), scale, 0);
 
     return data;
 }
@@ -86,34 +107,45 @@ glm::mat4 Camera::get_pv_matrix()
 void Camera::update_imgui()
 {
     static bool is_active = true;
-    ImGui::SetNextWindowPos({0, 270}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({200, 240}, ImGuiCond_Once);
+    ImGui::SetNextWindowPos({0, 265}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({200, 210}, ImGuiCond_Once);
 
     if (ImGui::Begin("Camera Data", &is_active))
     {
-        ImGui::PushItemWidth(100);
-        ImGui::SliderFloat("fov", &fov, 1, 179);
-        ImGui::DragFloat3("translation", glm::value_ptr(translation), 0.2f);
+        ImGui::PushItemWidth(125);
+        ImGui::DragFloat3("position", glm::value_ptr(translation), 0.2f);
         ImGui::DragFloat3("rotation", glm::value_ptr(rotation), 0.2f);
-        ImGui::PushItemWidth(130);
-        ImGui::DragFloat4("mat4[0]", glm::value_ptr(camera_matrix[0]), 0.05f);
-        ImGui::DragFloat4("mat4[1]", glm::value_ptr(camera_matrix[1]), 0.05f);
-        ImGui::DragFloat4("mat4[2]", glm::value_ptr(camera_matrix[2]), 0.05f);
-        ImGui::DragFloat4("mat4[3]", glm::value_ptr(camera_matrix[3]), 0.05f);
         ImGui::Text("Reset");
         ImGui::SameLine();
-        if (ImGui::Button("Pos"))
-        {
-            translation = {};
-        }
+        if (ImGui::Button("Pos")) translation = {};
+
         ImGui::SameLine();
-        if (ImGui::Button("Rot"))
+        if (ImGui::Button("Rot")) rotation = {};
+
+        ImGui::Text("Projection");
+        dropdown_helper("camera_mode", mode, CameraModes);
+        if (mode == 0)
         {
-            rotation = {};
+            ImGui::SliderFloat("fov", &fov, 1, 179);
         }
+        else if (mode == 1)
+        {
+            ImGui::SliderFloat("scale", &scale, 0.1, 20);
+        }
+
         if (ImGui::RadioButton("Clamp Vertical Rot", vertical_view_angle_clamp))
         {
             vertical_view_angle_clamp = !vertical_view_angle_clamp;
+        }
+        static bool show_view_matrix = false;
+        ImGui::Checkbox("Show View Matrix", &show_view_matrix);
+        if (show_view_matrix)
+        {
+            ImGui::PushItemWidth(170);
+            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[0]), 0.05f);
+            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[1]), 0.05f);
+            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[2]), 0.05f);
+            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[3]), 0.05f);
         }
     }
     ImGui::End();

@@ -4,8 +4,9 @@
 
 #include <imgui.h>
 
-inline void dropdown_helper(const char* unique_identifier, int& cur_mode, int count,
-                            const char** mode_names)
+template <std::size_t count>
+inline void dropdown_helper(const char* unique_identifier, int& cur_mode,
+                            const char* (&mode_names)[count])
 {
     ImGuiStyle& style = ImGui::GetStyle();
     float w = ImGui::CalcItemWidth();

@@ -63,8 +63,8 @@ Ray camera_ortho_ray
 */
  
 {
-	float scale_x = 4.0;
-	float scale_y = 4.0;
+	float scale_x = cam.params.z;
+	float scale_y = cam.params.z;
 	float aspect = cam.params.x;
 	float u = aspect * (2.0*x-1.0);
 	float v = 2.0*y-1.0;

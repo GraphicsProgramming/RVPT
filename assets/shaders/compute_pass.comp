@@ -17,7 +17,7 @@ layout(binding = 0) uniform RenderSettings
     int max_bounces;
     int aa;
     uint current_frame;
-    int reserved;
+    int camera_mode;
     int top_left_render_mode;
     int top_right_render_mode;
     int bottom_left_render_mode;
@@ -31,7 +31,7 @@ layout(binding = 3) buffer Random { float random_source[]; };
 layout(binding = 4) uniform Camera
 {
     mat4 matrix;
-    vec4 params; /* aspect, hfov, 0, 0 */
+    vec4 params; /* aspect, hfov, scale, 0 */
 }
 cam;
 ivec2 dim = imageSize(result_image);
@@ -169,9 +169,6 @@ void main()
     else if (pixel_split.x > render_settings.split_ratio.x)
         integrator_idx = render_settings.top_right_render_mode;
 
-    const int camera_idx_left = 0;
-    const int camera_idx_right = 1;
-
     vec3 temporal_accumulation_sample =
         (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
         min(render_settings.current_frame, 1);
@@ -182,7 +179,7 @@ void main()
         vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
 		coord.y = 1.0-coord.y; /* flip image vertically */
         
-		Ray ray = get_camera_ray(camera_idx_left, coord.x, coord.y);
+		Ray ray = get_camera_ray(render_settings.camera_mode, coord.x, coord.y);
 		sampled += eval_integrator(integrator_idx, ray);
 	}
 
