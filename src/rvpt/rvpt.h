@@ -67,7 +67,7 @@ public:
         int max_bounces = 8;
         int aa = 1;
         uint32_t current_frame = 1;
-        int reserved = 0;
+        int camera_mode = 0;
         int top_left_render_mode = 9;
         int top_right_render_mode = 9;
         int bottom_left_render_mode = 9;
@@ -100,8 +100,13 @@ private:
     std::vector<Triangle> triangles;
     std::vector<Material> materials;
 
-    RenderSettings previous_settings;
-    glm::mat4 last_camera_mat;
+    struct PreviousFrameState
+    {
+        RenderSettings settings;
+        std::vector<glm::vec4> camera_data;
+
+        bool operator==(RVPT::PreviousFrameState const& right);
+    } previous_frame_state;
 
     struct Context
     {

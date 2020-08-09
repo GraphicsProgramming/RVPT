@@ -7,6 +7,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+static const char* CameraModes[] = {"perspective", "orthographic", "spherical"};
+
 class Camera
 {
 public:
@@ -16,6 +18,13 @@ public:
     void rotate(glm::vec3 rotation);
 
     void set_fov(float fov);
+    float get_fov();
+
+    void set_scale(float scale);
+    float get_scale();
+
+    void set_camera_mode(int mode);
+    int get_camera_mode();
 
     // Prevent looking beyond +/- 90 degrees vertically
     void clamp_vertical_view_angle(bool clamp);
@@ -32,7 +41,8 @@ public:
 
 private:
     void recalculate_values();
-    float fov{}, aspect{};
+    int mode = 0;
+    float fov = 90.f, scale = 4.f, aspect{};
     bool vertical_view_angle_clamp = false;
 
     glm::vec3 translation{};
