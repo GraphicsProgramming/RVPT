@@ -832,7 +832,7 @@ std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) c
     std::ifstream file(shader_path, std::ios::ate | std::ios::binary);
     if (!file.is_open())
     {
-        std::cerr << "Failed to open file: " + filename << '\n';
+        fmt::print(stderr, "Failed to open file: {}\n", filename);
         return {};
     }
     size_t file_size = (size_t)file.tellg();

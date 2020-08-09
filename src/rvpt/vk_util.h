@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cstdint>
 
-#include <iostream>
 #include <string>
 #include <mutex>
 #include <variant>
@@ -13,16 +12,18 @@
 
 #include <vulkan/vulkan.h>
 
+#include <fmt/core.h>
+
 const char* error_str(const VkResult result);
-#define VK_CHECK_RESULT(f)                                                                         \
-    {                                                                                              \
-        VkResult res = (f);                                                                        \
-        if (res != VK_SUCCESS)                                                                     \
-        {                                                                                          \
-            std::cerr << "Fatal : VkResult is" << error_str(res) << "in " << __FILE__ << "at line" \
-                      << __LINE__ << '\n';                                                         \
-            assert(res == VK_SUCCESS);                                                             \
-        }                                                                                          \
+#define VK_CHECK_RESULT(f)                                                                  \
+    {                                                                                       \
+        VkResult res = (f);                                                                 \
+        if (res != VK_SUCCESS)                                                              \
+        {                                                                                   \
+            fmt::print(stderr, "Fatal : VkResult is {} in {} at line {}\n", error_str(res), \
+                       __FILE__, __LINE__);                                                 \
+            assert(res > VK_SUCCESS); /*only crash on negative results */                   \
+        }                                                                                   \
     }
 
 namespace VK

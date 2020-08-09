@@ -34,7 +34,7 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT r
 
 target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader
-target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json lib_imgui)
+target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
 
 if (DEBUG)
     if (WIN32)
