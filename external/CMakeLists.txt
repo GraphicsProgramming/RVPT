@@ -29,7 +29,12 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
     GIT_TAG        v3.8.0
 )
-FetchContent_MakeAvailable(glfw vk_bootstrap glm nlohman_json)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt
+    GIT_TAG        7.0.3
+)
+FetchContent_MakeAvailable(glfw vk_bootstrap glm nlohman_json fmt)
 
 FetchContent_Declare(
     imgui

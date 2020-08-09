@@ -9,6 +9,7 @@
 #include <glm/ext.hpp>
 #include <nlohmann/json.hpp>
 #include <imgui.h>
+#include <fmt/core.h>
 
 #include "imgui_helpers.h"
 
@@ -280,7 +281,7 @@ RVPT::draw_return RVPT::draw()
     }
     else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
-        std::cerr << "Failed to acquire next swapchain image\n";
+        fmt::print(stderr, "Failed to acquire next swapchain image\n");
         assert(false);
     }
     record_command_buffer(current_frame, swapchain_image_index);
@@ -304,7 +305,7 @@ RVPT::draw_return RVPT::draw()
     }
     else if (result != VK_SUCCESS)
     {
-        std::cerr << "Failed to present swapchain image\n";
+        fmt::print(stderr, "Failed to present swapchain image\n");
         assert(false);
     }
     current_sync_index = (current_sync_index + 1) % sync_resources.size();
@@ -355,20 +356,19 @@ void RVPT::reload_shaders()
 {
     if (source_folder == "")
     {
-        std::cout << "source_folder not set, unable to reload shaders\n";
+        fmt::print("source_folder not set, unable to reload shaders\n");
         return;
     }
-
+    fmt::print("Compiling Shaders:\n");
 #ifdef WIN32
     auto double_backslash = source_folder;
     replace_all(double_backslash, "/", "\\\\");
-    auto str = std::string("cd ") + double_backslash + "\\\\assets\\\\shaders && " +
-               double_backslash + "\\\\scripts\\\\compile_shaders.bat";
-    std::cout << str << "\n";
+    std::string str = fmt::format(
+        "cd {0}\\\\assets\\\\shaders && {0}\\\\scripts\\\\compile_shaders.bat", double_backslash);
     std::system(str.c_str());
 #elif __unix__
-    auto str = std::string("cd ") + source_folder + "/assets/shaders && bash " + source_folder +
-               "/scripts/compile_shaders.sh";
+    std::string str =
+        fmt::format("cd {0}/assets/shaders && bash {0}/scripts/compile_shaders.sh", source_folder);
     std::system(str.c_str());
 #endif
     if (compute_queue) compute_queue->wait_idle();
@@ -392,14 +392,23 @@ bool RVPT::context_init()
 #endif
 
     vkb::InstanceBuilder inst_builder;
-    auto inst_ret = inst_builder.set_app_name(window_ref.get_settings().title)
-                        .request_validation_layers(use_validation)
-                        .use_default_debug_messenger()
-                        .build();
+    auto inst_ret =
+        inst_builder.set_app_name(window_ref.get_settings().title)
+            .request_validation_layers(use_validation)
+            .set_debug_callback([](VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                   VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                   const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                   void* pUserData) -> VkBool32 {
+                auto severity = vkb::to_string_message_severity(messageSeverity);
+                auto type = vkb::to_string_message_type(messageType);
+                fmt::print("[{}: {}] {}\n", severity, type, pCallbackData->pMessage);
+                return VK_FALSE;
+            })
+            .build();
 
     if (!inst_ret)
     {
-        std::cerr << "Failed to create an instance: " << inst_ret.error().message() << '\n';
+        fmt::print(stderr, "Failed to create an instance: {}\n", inst_ret.error().message());
         return false;
     }
 
@@ -409,7 +418,7 @@ bool RVPT::context_init()
         context.inst.instance, window_ref.get_window_pointer(), nullptr, &context.surf);
     if (surf_res != VK_SUCCESS)
     {
-        std::cerr << "Failed to create a surface" << '\n';
+        fmt::print(stderr, "Failed to create a surface: Error Code{}\n", surf_res);
         return false;
     }
     VkPhysicalDeviceFeatures required_features{};
@@ -424,7 +433,7 @@ bool RVPT::context_init()
 
     if (!phys_ret)
     {
-        std::cerr << "Failed to find a physical device: " << phys_ret.error().message() << '\n';
+        fmt::print(stderr, "Failed to find a physical device: \n", phys_ret.error().message());
         return false;
     }
 
@@ -432,7 +441,7 @@ bool RVPT::context_init()
     auto dev_ret = dev_builder.build();
     if (!dev_ret)
     {
-        std::cerr << "Failed create a device: " << dev_ret.error().message() << '\n';
+        fmt::print(stderr, "Failed create a device: \n", dev_ret.error().message());
         return false;
     }
 
@@ -442,8 +451,8 @@ bool RVPT::context_init()
     auto graphics_queue_index_ret = context.device.get_queue_index(vkb::QueueType::graphics);
     if (!graphics_queue_index_ret)
     {
-        std::cerr << "Failed get the graphics queue: " << dev_ret.error().message() << '\n';
-
+        fmt::print(stderr, "Failed to get the graphics queue: \n",
+                   graphics_queue_index_ret.error().message());
         return false;
     }
     graphics_queue.emplace(vk_device, graphics_queue_index_ret.value(), "graphics_queue");
@@ -451,8 +460,8 @@ bool RVPT::context_init()
     auto present_queue_index_ret = context.device.get_queue_index(vkb::QueueType::present);
     if (!present_queue_index_ret)
     {
-        std::cerr << "Failed get the present queue: " << dev_ret.error().message() << '\n';
-
+        fmt::print(stderr, "Failed to get the present queue: \n",
+                   present_queue_index_ret.error().message());
         return false;
     }
     present_queue.emplace(vk_device, present_queue_index_ret.value(), "present_queue");
@@ -475,7 +484,7 @@ bool RVPT::swapchain_init()
     auto ret = swapchain_builder.build();
     if (!ret)
     {
-        std::cerr << "Failed to create a swapchain:" << ret.error().message() << '\n';
+        fmt::print(stderr, "Failed to create a swapchain: \n", ret.error().message());
         return false;
     }
     vkb_swapchain = ret.value();
@@ -491,7 +500,7 @@ bool RVPT::swapchain_reinit()
     auto ret = swapchain_builder.set_old_swapchain(vkb_swapchain).build();
     if (!ret)
     {
-        std::cerr << "Failed to recreate swapchain:" << ret.error().message() << '\n';
+        fmt::print(stderr, "Failed to recreate a swapchain: \n", ret.error().message());
         return false;
     }
     vkb::destroy_swapchain(vkb_swapchain);

@@ -4,22 +4,21 @@
 
 #include "window.h"
 
-#include <iostream>
-
 #include <imgui.h>
+#include <fmt/core.h>
 
 Window::Window(Window::Settings settings) : active_settings(settings)
 {
     // Initializing glfw and a window
     auto glfw_ret = glfwInit();
-    if (!glfw_ret) std::cerr << "Failed to initialize glfw" << '\n';
+    if (!glfw_ret) fmt::print(stderr, "Failed to initialize glfw\n");
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window_ptr =
         glfwCreateWindow(settings.width, settings.height, settings.title, nullptr, nullptr);
     if (window_ptr == nullptr)
-        std::cerr << "Failed to create a glfw window" << '\n';
+        fmt::print(stderr, "Failed to create a glfw window\n");
     else
     {
         glfwSetWindowUserPointer(window_ptr, this);

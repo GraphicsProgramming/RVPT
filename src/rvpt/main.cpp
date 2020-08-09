@@ -2,9 +2,8 @@
 // Created by AregevDev on 23/04/2020.
 //
 
-#include <iostream>
-
 #include <imgui.h>
+#include <fmt/core.h>
 
 #include "rvpt.h"
 
@@ -44,7 +43,7 @@ int main()
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
     {
-        std::cout << "failed to initialize RVPT\n";
+        fmt::print("failed to initialize RVPT\n");
         return 0;
     }
     window.setup_imgui();

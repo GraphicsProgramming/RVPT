@@ -3,8 +3,6 @@
 //
 #include "camera.h"
 
-#include <iostream>
-
 #define GLM_DEPTH_ZERO_TO_ONE
 #include <glm/ext.hpp>
 #include <glm/gtx/euler_angles.hpp>

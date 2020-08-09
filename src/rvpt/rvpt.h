@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <iostream>
 #include <random>
 
 #include <vulkan/vulkan.h>
