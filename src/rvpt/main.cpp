@@ -22,20 +22,23 @@ void load_model(RVPT& rvpt, std::string inputfile, int material_id)
 
     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, inputfile.c_str());
 
-    if (!warn.empty()) {
+    if (!warn.empty())
+    {
         fmt::print(warn + '\n');
     }
 
-    if (!err.empty()) {
+    if (!err.empty())
+    {
         fmt::print(err + '\n');
     }
 
-    if (!ret) {
+    if (!ret)
+    {
         fmt::print("There was an error loading a model");
         exit(-1);
     }
 
-// Loop over shapes
+    // Loop over shapes
     for (size_t s = 0; s < shapes.size(); s++) {
         // Loop over faces(polygon)
         size_t index_offset = 0;
@@ -114,7 +117,6 @@ int main()
         fmt::print("failed to initialize RVPT\n");
         return 0;
     }
-
 
     window.setup_imgui();
     window.add_mouse_move_callback([&window, &rvpt](double x, double y) {
