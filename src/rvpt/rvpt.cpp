@@ -331,7 +331,7 @@ void replace_all(std::string& str, const std::string& from, const std::string& t
 
 void RVPT::reload_shaders()
 {
-    if (source_folder == "")
+        if (source_folder == "")
     {
         fmt::print("source_folder not set, unable to reload shaders\n");
         return;
@@ -610,6 +610,15 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                   window_ref.get_settings().height * 4),
         VK::MemoryUsage::gpu);
 
+    auto reprojection_storage_image = VK::Image(
+        vk_device, memory_allocator, *graphics_queue, "reprojection_storage_image",
+        VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width,
+        window_ref.get_settings().height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT,
+        static_cast<VkDeviceSize>(window_ref.get_settings().width *
+                                  window_ref.get_settings().height * 4),
+        VK::MemoryUsage::gpu);
+
     VkFormat depth_format =
         VK::get_depth_image_format(context.device.physical_device.physical_device);
 
@@ -634,6 +643,7 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                     opaque,
                                     wireframe,
                                     std::move(temporal_storage_image),
+                                    std::move(reprojection_storage_image),
                                     std::move(depth_image)};
 }
 
@@ -860,4 +870,20 @@ void RVPT::add_sphere(Sphere sphere)
 void RVPT::add_triangle(Triangle triangle)
 {
     triangles.emplace_back(triangle);
+}
+
+void RVPT::get_asset_path(std::string& asset_path)
+{
+    // I'm 99% sure this method can be made a lot faster, which it 100% can.
+    // but I really cannot be asked.
+    // Is this method even required? Could we be doing something else? Most likely yes.
+    // Any idea dm me on discord Legend#4321
+
+    if (source_folder == "")
+    {
+        fmt::print("source folder not set, unable to get asset path\n");
+        return;
+    }
+
+    asset_path = source_folder + "/assets/" + asset_path;
 }
