@@ -24,17 +24,17 @@ void load_model(RVPT& rvpt, std::string inputfile, int material_id)
 
     if (!warn.empty())
     {
-        fmt::print(warn + '\n');
+        fmt::print("[{}: {}] {}\n", "WARNING", "MODEL-LOADING", warn);
     }
 
     if (!err.empty())
     {
-        fmt::print(err + '\n');
+        fmt::print("[{}: {}] {}\n", "ERROR", "MODEL-LOADING", err);
     }
 
     if (!ret)
     {
-        fmt::print("There was an error loading a model");
+        fmt::print("[{}: {}] {}\n", "ERROR", "MODEL-LOADING", "There was an unknown error loading the model");
         exit(-1);
     }
 
