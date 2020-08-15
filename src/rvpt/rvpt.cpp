@@ -331,7 +331,7 @@ void replace_all(std::string& str, const std::string& from, const std::string& t
 
 void RVPT::reload_shaders()
 {
-        if (source_folder == "")
+    if (source_folder == "")
     {
         fmt::print("source_folder not set, unable to reload shaders\n");
         return;
