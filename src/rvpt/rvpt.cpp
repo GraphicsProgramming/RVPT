@@ -48,28 +48,6 @@ RVPT::RVPT(Window& window)
 
     random_numbers.resize(20480);
 
-    materials.emplace_back(glm::vec4(0.3, 0.7, 0.1, 0), glm::vec4(0, 0, 0, 0),
-                           Material::Type::LAMBERT);
-    spheres.emplace_back(glm::vec3(0, -101, 0), 100.f, 0);
-
-    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 1.5), glm::vec4(0, 0, 0, 0),
-                           Material::Type::DIELECTRIC);
-    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 1.0 / 1.5), glm::vec4(0, 0, 0, 0),
-                           Material::Type::DIELECTRIC);
-    spheres.emplace_back(glm::vec3(0, 1.5, 0), 1.0f, 1);
-
-    spheres.emplace_back(glm::vec3(0, 1, 5), 0.5f, 1);
-    spheres.emplace_back(glm::vec3(0, 1, 5), 0.45f, 2);
-
-    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 3);
-    triangles.emplace_back(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 4);
-    triangles.emplace_back(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5);
-    triangles.emplace_back(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 6);
-
-    materials.emplace_back(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0), Material::Type::LAMBERT);
-    materials.emplace_back(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::MIRROR);
 }
 
 RVPT::~RVPT() {}
@@ -867,4 +845,19 @@ void RVPT::record_compute_command_buffer()
                   per_frame_data[current_frame_index].output_image.height / 16, 1);
 
     command_buffer.end();
+}
+
+void RVPT::add_material(Material material)
+{
+    materials.emplace_back(material);
+}
+
+void RVPT::add_sphere(Sphere sphere)
+{
+    spheres.emplace_back(sphere);
+}
+
+void RVPT::add_triangle(Triangle triangle)
+{
+    triangles.emplace_back(triangle);
 }

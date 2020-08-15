@@ -39,6 +39,29 @@ int main()
     Window window(settings);
 
     RVPT rvpt(window);
+    // Setup Demo Scene
+    rvpt.add_material(Material(glm::vec4(0.3, 0.7, 0.1, 0), glm::vec4(0, 0, 0, 0),
+                               Material::Type::LAMBERT));
+    rvpt.add_sphere(Sphere(glm::vec3(0, -101, 0), 100.f, 0));
+
+    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 1.5), glm::vec4(0, 0, 0, 0),
+                               Material::Type::DIELECTRIC));
+    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 1.0 / 1.5), glm::vec4(0, 0, 0, 0),
+                               Material::Type::DIELECTRIC));
+
+    rvpt.add_sphere(Sphere(glm::vec3(0, 1.5, 0), 1.0f, 1));
+    rvpt.add_sphere(Sphere(glm::vec3(0, 1, 5), 0.5f, 1));
+    rvpt.add_sphere(Sphere(glm::vec3(0, 1, 5), 0.45f, 2));
+
+    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 3));
+    rvpt.add_triangle(Triangle(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 4));
+    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5));
+    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 6));
+
+    rvpt.add_material(Material(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT));
+    rvpt.add_material(Material(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT));
+    rvpt.add_material(Material(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0), Material::Type::LAMBERT));
+    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::MIRROR));
 
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
@@ -46,6 +69,8 @@ int main()
         fmt::print("failed to initialize RVPT\n");
         return 0;
     }
+
+
     window.setup_imgui();
     window.add_mouse_move_callback([&window, &rvpt](double x, double y) {
         if (window.is_mouse_locked_to_window())
