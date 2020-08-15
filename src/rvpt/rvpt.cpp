@@ -610,15 +610,6 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                   window_ref.get_settings().height * 4),
         VK::MemoryUsage::gpu);
 
-    auto reprojection_storage_image = VK::Image(
-        vk_device, memory_allocator, *graphics_queue, "reprojection_storage_image",
-        VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, window_ref.get_settings().width,
-        window_ref.get_settings().height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT,
-        static_cast<VkDeviceSize>(window_ref.get_settings().width *
-                                  window_ref.get_settings().height * 4),
-        VK::MemoryUsage::gpu);
-
     VkFormat depth_format =
         VK::get_depth_image_format(context.device.physical_device.physical_device);
 
@@ -643,7 +634,6 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                     opaque,
                                     wireframe,
                                     std::move(temporal_storage_image),
-                                    std::move(reprojection_storage_image),
                                     std::move(depth_image)};
 }
 
