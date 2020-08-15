@@ -40,6 +40,7 @@ uint iframe = render_settings.current_frame;
 layout(std430, binding = 5) buffer Spheres { Sphere spheres[]; };
 layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
 layout(std430, binding = 7) buffer Materials { Material materials[]; };
+layout(binding = 8, rgba8) uniform image2D reprojection_image;
 
 #include "util.glsl"
 #include "camera.glsl"
@@ -48,7 +49,6 @@ layout(std430, binding = 7) buffer Materials { Material materials[]; };
 #include "distance_functions.glsl"
 #include "material.glsl"
 #include "integrators.glsl"
-
 
 bool colour(inout Ray ray, inout Record record)
 {
@@ -64,8 +64,8 @@ bool colour(inout Ray ray, inout Record record)
     else
     {
         record.albedo = vec3(0);
-        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
-        // record.emission = vec3(0);
+//        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
+         record.emission = vec3(0);
         record.reflectiveness = 0.0;
         return false;
     }

@@ -4,8 +4,68 @@
 
 #include <imgui.h>
 #include <fmt/core.h>
-
 #include "rvpt.h"
+
+#define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
+#include "tinyobjloader/tiny_obj_loader.h"
+
+void load_model(RVPT& rvpt, std::string inputfile, int material_id)
+{
+    rvpt.get_asset_path(inputfile);
+
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+
+    std::string warn;
+    std::string err;
+
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, inputfile.c_str());
+
+    if (!warn.empty()) {
+        fmt::print(warn + '\n');
+    }
+
+    if (!err.empty()) {
+        fmt::print(err + '\n');
+    }
+
+    if (!ret) {
+        fmt::print("There was an error loading a model");
+        exit(-1);
+    }
+
+// Loop over shapes
+    for (size_t s = 0; s < shapes.size(); s++) {
+        // Loop over faces(polygon)
+        size_t index_offset = 0;
+        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+            int fv = shapes[s].mesh.num_face_vertices[f];
+
+            // Loop over vertices in the face.
+            if (fv != 3)
+            {
+                fmt::print("Shape had a face with more than 3 vertices, skipping");
+                continue;
+            }
+            glm::vec3 vertices[3];
+
+            for (size_t v = 0; v < fv; v++) {
+                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+                vertices[v].x = attrib.vertices[3*idx.vertex_index+0];
+                vertices[v].y = attrib.vertices[3*idx.vertex_index+1];
+                vertices[v].z = attrib.vertices[3*idx.vertex_index+2];
+            }
+            index_offset += fv;
+
+            rvpt.add_triangle(Triangle(vertices[0], vertices[1], vertices[2], material_id));
+
+            // per-face material
+            shapes[s].mesh.material_ids[f];
+        }
+    }
+
+}
 
 void update_camera(Window& window, RVPT& rvpt)
 {
@@ -39,29 +99,14 @@ int main()
     Window window(settings);
 
     RVPT rvpt(window);
+
+    load_model(rvpt, "models/rabbit.obj", 1);
+
     // Setup Demo Scene
-    rvpt.add_material(Material(glm::vec4(0.3, 0.7, 0.1, 0), glm::vec4(0, 0, 0, 0),
+    rvpt.add_material(Material(glm::vec4(1, 1, 1, 0), glm::vec4(0.1, 0.4, 0.6, 0),
                                Material::Type::LAMBERT));
-    rvpt.add_sphere(Sphere(glm::vec3(0, -101, 0), 100.f, 0));
-
-    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 1.5), glm::vec4(0, 0, 0, 0),
-                               Material::Type::DIELECTRIC));
-    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 1.0 / 1.5), glm::vec4(0, 0, 0, 0),
-                               Material::Type::DIELECTRIC));
-
-    rvpt.add_sphere(Sphere(glm::vec3(0, 1.5, 0), 1.0f, 1));
-    rvpt.add_sphere(Sphere(glm::vec3(0, 1, 5), 0.5f, 1));
-    rvpt.add_sphere(Sphere(glm::vec3(0, 1, 5), 0.45f, 2));
-
-    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, -2), glm::vec3(-2, 0, 2), glm::vec3(-2, 2, 2), 3));
-    rvpt.add_triangle(Triangle(glm::vec3(2, 0, -2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 4));
-    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, -2), glm::vec3(2, 0, -2), glm::vec3(2, 2, -2), 5));
-    rvpt.add_triangle(Triangle(glm::vec3(-2, 0, 2), glm::vec3(2, 0, 2), glm::vec3(2, 2, 2), 6));
-
-    rvpt.add_material(Material(glm::vec4(1.0, 0.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT));
-    rvpt.add_material(Material(glm::vec4(0.0, 1.0, 0.0, 0), glm::vec4(0), Material::Type::LAMBERT));
-    rvpt.add_material(Material(glm::vec4(0.0, 0.0, 1.0, 0), glm::vec4(0), Material::Type::LAMBERT));
-    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::MIRROR));
+    rvpt.add_sphere(Sphere(glm::vec3(0, -100, 0), 100.f, 0));
+    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::DIELECTRIC));
 
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
