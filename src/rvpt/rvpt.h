@@ -59,6 +59,10 @@ public:
     void toggle_wireframe_debug();
     void set_raytrace_mode(int mode);
 
+    void add_material(Material material);
+    void add_sphere(Sphere sphere);
+    void add_triangle(Triangle triangle);
+
     Camera scene_camera;
     Timer time;
 
