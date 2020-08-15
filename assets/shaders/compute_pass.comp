@@ -40,7 +40,6 @@ uint iframe = render_settings.current_frame;
 layout(std430, binding = 5) buffer Spheres { Sphere spheres[]; };
 layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
 layout(std430, binding = 7) buffer Materials { Material materials[]; };
-layout(binding = 8, rgba8) uniform image2D reprojection_image;
 
 #include "util.glsl"
 #include "camera.glsl"

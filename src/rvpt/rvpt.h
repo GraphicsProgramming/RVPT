@@ -162,8 +162,6 @@ private:
         VK::GraphicsPipelineHandle debug_wireframe_pipeline;
 
         VK::Image temporal_storage_image;
-        VK::Image reprojection_storage_image;
-//        VK::Image normal_buffer;
         VK::Image depth_buffer;
     };
 
