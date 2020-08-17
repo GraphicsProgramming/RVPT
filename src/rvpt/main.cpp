@@ -30,11 +30,6 @@ void load_model(RVPT& rvpt, std::string inputfile, int material_id)
     if (!err.empty())
     {
         fmt::print("[{}: {}] {}\n", "ERROR", "MODEL-LOADING", err);
-    }
-
-    if (!ret)
-    {
-        fmt::print("[{}: {}] {}\n", "ERROR", "MODEL-LOADING", "There was an unknown error loading the model");
         exit(-1);
     }
 
@@ -109,7 +104,7 @@ int main()
     rvpt.add_material(Material(glm::vec4(1, 1, 1, 0), glm::vec4(0.1, 0.4, 0.6, 0),
                                Material::Type::LAMBERT));
     rvpt.add_sphere(Sphere(glm::vec3(0, -100, 0), 100.f, 0));
-    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::DIELECTRIC));
+    rvpt.add_material(Material(glm::vec4(1.0, 1.0, 1.0, 0), glm::vec4(0), Material::Type::LAMBERT));
 
     bool rvpt_init_ret = rvpt.initialize();
     if (!rvpt_init_ret)
