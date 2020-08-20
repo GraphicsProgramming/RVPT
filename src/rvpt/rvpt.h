@@ -59,6 +59,7 @@ public:
     void toggle_debug();
     void toggle_wireframe_debug();
     void toggle_bvh_debug();
+    void toggle_view_last_bvh_depths();
     void set_raytrace_mode(int mode);
 
     void add_material(Material material);
@@ -108,7 +109,11 @@ private:
 
     // BVH AABB's
     BvhNode tl_bvh;
-    std::vector<AABB> bvh_bounds;
+    std::vector<std::vector<AABB>> depth_bvh_bounds;
+    size_t bvh_vertex_count = 0;
+    int max_bvh_build_depth = 5;
+    int max_bvh_view_depth = 2;
+    bool view_previous_depths = true;
     // Yes I know, I have an extra set of the AABB's, I did this so instead of recursively going through
     // every. single. node. To setup the vertices for the debug view, we only have to do go through them once
     // which means the split function actually takes a pointer to this, and uploads it's own AABB to the vector every time it gets "split"
