@@ -84,7 +84,8 @@ bool RVPT::initialize()
     }
 
     // Bvh Stuff
-    bvh_bounds.push_back(tl_bvh.bounds);
+    depth_bvh_bounds.resize(max_bvh_build_depth);
+    tl_bvh.split(depth_bvh_bounds, 0, max_bvh_build_depth);
 
     return init;
 }
@@ -146,40 +147,51 @@ bool RVPT::update()
 
     if (debug_bvh_enabled)
     {
+        bvh_vertex_count = 0;
         std::vector<DebugVertex> bvh_debug_vertices;
-        bvh_debug_vertices.reserve(bvh_bounds.size() * 17);
-
         const glm::vec3 colour = {0, 0, 0};
         const glm::vec3 normal = {0, 0, 0};
-        for (const auto& bound : bvh_bounds)
+        for (int i = view_previous_depths ? 0 : max_bvh_view_depth - 1; i < max_bvh_view_depth; i++)
         {
-            // Please someone tell me how I can do this better
+            const std::vector<AABB> bounding_boxes = depth_bvh_bounds.at(i);
 
-            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
-            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+            if (!bounding_boxes.empty())
+            {
+                for (const auto& bound : bounding_boxes)
+                {
+                    bvh_vertex_count += 24;
+                    // Doing the vertical lines
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
 
+                    // Doing the "top" of the box
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+
+                    // Doing the "bottom" of the box
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+                    bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+                }
+            }
         }
-
-//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-//        bvh_debug_vertices.push_back({glm::vec3(2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-//        bvh_debug_vertices.push_back({glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
         size_t debug_vert_size = bvh_debug_vertices.size() * sizeof(DebugVertex);
         if (per_frame_data[current_frame_index].debug_bvh_vertex_buffer.size() < debug_vert_size)
         {
@@ -237,6 +249,9 @@ void RVPT::update_imgui()
         if (ImGui::Button("Wireframe")) toggle_wireframe_debug();
 
         if (ImGui::Button("BVH Debug")) toggle_bvh_debug();
+        ImGui::SliderInt("Depth", &max_bvh_view_depth, 1, max_bvh_build_depth);
+        ImGui::SameLine();
+        if (ImGui::Button("View Last Depths")) toggle_view_last_bvh_depths();
 
         static bool horizontal_split = false;
         static bool vertical_split = false;
@@ -410,6 +425,7 @@ void RVPT::reload_shaders()
 void RVPT::toggle_debug() { debug_overlay_enabled = !debug_overlay_enabled; }
 void RVPT::toggle_wireframe_debug() { debug_wireframe_mode = !debug_wireframe_mode; }
 void RVPT::toggle_bvh_debug() { debug_bvh_enabled = !debug_bvh_enabled; }
+void RVPT::toggle_view_last_bvh_depths() { view_previous_depths = !view_previous_depths; }
 void RVPT::set_raytrace_mode(int mode) { render_settings.top_left_render_mode = mode; }
 
 // Private functions //
@@ -685,7 +701,7 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     bvh_debug_details.binding_desc = bvh_binding_desc;
     bvh_debug_details.attribute_desc = bvh_attribute_desc;
     bvh_debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
-    bvh_debug_details.primitive_topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    bvh_debug_details.primitive_topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
     bvh_debug_details.cull_mode = VK_CULL_MODE_NONE;
     bvh_debug_details.enable_depth = true;
 
@@ -931,7 +947,7 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
 
         bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_bvh_vertex_buffer);
 
-        vkCmdDraw(cmd_buf, (uint32_t) bvh_bounds.size() * 17, 1, 0, 0);
+        vkCmdDraw(cmd_buf, (uint32_t) bvh_vertex_count, 1, 0, 0);
     }
 
     if (show_imgui)
