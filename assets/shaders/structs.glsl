@@ -13,6 +13,12 @@ struct Triangle
     vec4 mat_id;
 };
 
+struct BVH
+{
+    vec4 min; // W components are unused
+    vec4 max;
+};
+
 struct Ray
 {
     vec3 origin;

@@ -670,7 +670,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.topology = details.primitive_topology;
     input_assembly.primitiveRestartEnable = VK_FALSE;
 
     VkViewport viewport{};

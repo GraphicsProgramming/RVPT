@@ -57,6 +57,7 @@ public:
     void reload_shaders();
     void toggle_debug();
     void toggle_wireframe_debug();
+    void toggle_bvh_debug();
     void set_raytrace_mode(int mode);
 
     void add_material(Material material);
@@ -92,6 +93,8 @@ private:
     bool debug_overlay_enabled = false;
     bool debug_wireframe_mode = false;
 
+    bool debug_bvh_enabled = false;
+
     Window& window_ref;
     std::string source_folder = "";
 
@@ -101,6 +104,10 @@ private:
 
     // Random numbers (generated every frame)
     std::vector<float> random_numbers;
+
+    // BVH AABB's
+
+
 
     std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
@@ -151,6 +158,7 @@ private:
         VK::DescriptorPool image_pool;
         VK::DescriptorPool raytrace_descriptor_pool;
         VK::DescriptorPool debug_descriptor_pool;
+        VK::DescriptorPool debug_bvh_descriptor_pool;
 
         VkPipelineLayout fullscreen_triangle_pipeline_layout;
         VK::GraphicsPipelineHandle fullscreen_triangle_pipeline;
@@ -160,6 +168,9 @@ private:
         VkPipelineLayout debug_pipeline_layout;
         VK::GraphicsPipelineHandle debug_opaque_pipeline;
         VK::GraphicsPipelineHandle debug_wireframe_pipeline;
+
+        VkPipelineLayout debug_bvh_layout;
+        VK::GraphicsPipelineHandle debug_bvh_pipeline;
 
         VK::Image temporal_storage_image;
         VK::Image depth_buffer;
@@ -174,6 +185,7 @@ private:
         VK::Image output_image;
         VK::Buffer random_buffer;
         VK::Buffer camera_uniform;
+//        VK::Buffer bvh_buffer;
         VK::Buffer sphere_buffer;
         VK::Buffer triangle_buffer;
         VK::Buffer material_buffer;
@@ -185,6 +197,10 @@ private:
         VK::Buffer debug_camera_uniform;
         VK::Buffer debug_vertex_buffer;
         VK::DescriptorSet debug_descriptor_sets;
+
+        VK::Buffer debug_bvh_camera_uniform;
+        VK::Buffer debug_bvh_vertex_buffer;
+        VK::DescriptorSet debug_bvh_descriptor_set;
     };
     std::vector<PerFrameData> per_frame_data;
 
