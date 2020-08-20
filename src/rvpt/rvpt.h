@@ -19,6 +19,7 @@
 #include "timer.h"
 #include "geometry.h"
 #include "material.h"
+#include "bvh_node.h"
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -106,8 +107,13 @@ private:
     std::vector<float> random_numbers;
 
     // BVH AABB's
-
-
+    BvhNode tl_bvh;
+    std::vector<AABB> bvh_bounds;
+    // Yes I know, I have an extra set of the AABB's, I did this so instead of recursively going through
+    // every. single. node. To setup the vertices for the debug view, we only have to do go through them once
+    // which means the split function actually takes a pointer to this, and uploads it's own AABB to the vector every time it gets "split"
+    // If you have a better solution for this be my guest. Make a pull request and tell me how, because I can't think of a better solution
+    // At least not a better one that I would be able to write in an okay amount of time.
 
     std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
