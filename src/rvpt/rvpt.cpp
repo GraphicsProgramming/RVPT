@@ -34,7 +34,8 @@ RVPT::RVPT(Window& window)
     : window_ref(window),
       scene_camera(window.get_aspect_ratio()),
       random_generator(std::random_device{}()),
-      distribution(0.0f, 1.0f)
+      distribution(0.0f, 1.0f),
+      bvh_builder(BvhBuilder::Type::BottomTop)
 {
     ImGui::CreateContext();
 
@@ -85,7 +86,7 @@ bool RVPT::initialize()
 
     // Bvh Stuff
     depth_bvh_bounds.resize(max_bvh_build_depth);
-    tl_bvh.split(depth_bvh_bounds, 0, max_bvh_build_depth);
+    auto bvh = bvh_builder.build_global_bvh(depth_bvh_bounds, triangles);
 
     return init;
 }
@@ -151,9 +152,45 @@ bool RVPT::update()
         std::vector<DebugVertex> bvh_debug_vertices;
         const glm::vec3 colour = {0, 0, 0};
         const glm::vec3 normal = {0, 0, 0};
+
+#if 1
+        for (const auto& bound : depth_bvh_bounds)
+        {
+            bvh_vertex_count += 24;
+            // Doing the vertical lines
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+
+            // Doing the "top" of the box
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+
+            // Doing the "bottom" of the box
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+        }
+#elif
         for (int i = view_previous_depths ? 0 : max_bvh_view_depth - 1; i < max_bvh_view_depth; i++)
         {
-            const std::vector<AABB> bounding_boxes = depth_bvh_bounds.at(i);
+            const std::vector<AABB> bounding_boxes = depth_bvh_bounds[i];
 
             if (!bounding_boxes.empty())
             {
@@ -192,6 +229,7 @@ bool RVPT::update()
                 }
             }
         }
+#endif
         size_t debug_vert_size = bvh_debug_vertices.size() * sizeof(DebugVertex);
         if (per_frame_data[current_frame_index].debug_bvh_vertex_buffer.size() < debug_vert_size)
         {
@@ -1007,9 +1045,6 @@ void RVPT::add_sphere(Sphere sphere)
 
 void RVPT::add_triangle(Triangle triangle)
 {
-    tl_bvh.expand(triangle.vertex0);
-    tl_bvh.expand(triangle.vertex1);
-    tl_bvh.expand(triangle.vertex2);
     triangles.emplace_back(triangle);
 }
 
