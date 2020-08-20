@@ -315,6 +315,7 @@ struct GraphicsPipelineDetails
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
     bool enable_blending = false;
     VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
+    VkPrimitiveTopology  primitive_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     float line_width = 1.0f;
     VkCullModeFlags cull_mode = VK_CULL_MODE_FRONT_BIT;
     VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
