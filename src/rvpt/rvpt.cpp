@@ -84,6 +84,9 @@ bool RVPT::initialize()
         add_per_frame_data(i);
     }
 
+    // Bvh Stuff
+    bvh_bounds.push_back(tl_bvh.bounds);
+
     return init;
 }
 bool RVPT::update()
@@ -145,12 +148,39 @@ bool RVPT::update()
     if (debug_bvh_enabled)
     {
         std::vector<DebugVertex> bvh_debug_vertices;
-        bvh_debug_vertices.reserve(5);
-        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-        bvh_debug_vertices.push_back({glm::vec3(2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-        bvh_debug_vertices.push_back({glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-        bvh_debug_vertices.push_back({glm::vec3(-2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
-        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        bvh_debug_vertices.reserve(bvh_bounds.size() * 17);
+
+        const glm::vec3 colour = {0, 0, 0};
+        const glm::vec3 normal = {0, 0, 0};
+        for (const auto& bound : bvh_bounds)
+        {
+            // Please someone tell me how I can do this better
+
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.min.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.max.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.min.y, bound.min.z}, colour, normal});
+            bvh_debug_vertices.push_back({{bound.max.x, bound.max.y, bound.min.z}, colour, normal});
+
+        }
+
+//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+//        bvh_debug_vertices.push_back({glm::vec3(2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+//        bvh_debug_vertices.push_back({glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+//        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
         size_t debug_vert_size = bvh_debug_vertices.size() * sizeof(DebugVertex);
         if (per_frame_data[current_frame_index].debug_bvh_vertex_buffer.size() < debug_vert_size)
         {
@@ -916,7 +946,7 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
 
         bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_bvh_vertex_buffer);
 
-        vkCmdDraw(cmd_buf, (uint32_t) 5, 1, 0, 0);
+        vkCmdDraw(cmd_buf, (uint32_t) bvh_bounds.size() * 17, 1, 0, 0);
     }
 
     if (show_imgui)
@@ -968,7 +998,13 @@ void RVPT::add_material(Material material) { materials.emplace_back(material); }
 
 void RVPT::add_sphere(Sphere sphere) { spheres.emplace_back(sphere); }
 
-void RVPT::add_triangle(Triangle triangle) { triangles.emplace_back(triangle); }
+void RVPT::add_triangle(Triangle triangle)
+{
+    tl_bvh.expand(triangle.vertex0);
+    tl_bvh.expand(triangle.vertex1);
+    tl_bvh.expand(triangle.vertex2);
+    triangles.emplace_back(triangle);
+}
 
 void RVPT::get_asset_path(std::string& asset_path)
 {

@@ -39,11 +39,12 @@ struct Triangle
 
 struct AABB
 {
+    AABB() = default;
     AABB(glm::vec3 min, glm::vec3 max) : min(min), max(max) {}
 
     AABB(float min_x, float min_y, float min_z, float max_x, float max_y, float max_z) : min(min_x, min_y, min_z), max(max_x, max_y, max_z)
     {
     }
-    glm::vec3 min;
-    glm::vec3 max;
+    glm::vec3 min {0, 0, 0};
+    glm::vec3 max {0, 0, 0};
 };

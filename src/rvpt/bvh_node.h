@@ -16,4 +16,5 @@ struct BvhNode
     BvhNode* right = nullptr;
 
     void split();
+    void expand(const glm::vec3& expansion);
 };
