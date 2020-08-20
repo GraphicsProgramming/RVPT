@@ -20,6 +20,7 @@
 #include "geometry.h"
 #include "material.h"
 #include "bvh_node.h"
+#include "bvh_builder.h"
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -108,8 +109,8 @@ private:
     std::vector<float> random_numbers;
 
     // BVH AABB's
-    BvhNode tl_bvh;
-    std::vector<std::vector<AABB>> depth_bvh_bounds;
+    BvhBuilder bvh_builder;
+    std::vector<AABB> depth_bvh_bounds;
     size_t bvh_vertex_count = 0;
     int max_bvh_build_depth = 5;
     int max_bvh_view_depth = 2;

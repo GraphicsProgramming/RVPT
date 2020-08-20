@@ -46,4 +46,23 @@ struct AABB
     }
     glm::vec3 min {0, 0, 0};
     glm::vec3 max {0, 0, 0};
+
+    [[nodiscard]]
+    glm::vec3 center() const
+    {
+        return {
+            ((max.x - min.x) / 2) + min.x,
+            ((max.y - min.y) / 2) + min.y,
+            ((max.z - min.z) / 2) + min.z};
+    }
+
+    void expand(const glm::vec3& expansion)
+    {
+        min.x = fminf(min.x, expansion.x);
+        min.y = fminf(min.y, expansion.y);
+        min.z = fminf(min.z, expansion.z);
+        max.x = fmaxf(max.x, expansion.x);
+        max.y = fmaxf(max.y, expansion.y);
+        max.z = fmaxf(max.z, expansion.z);
+    }
 };
