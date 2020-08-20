@@ -12,6 +12,7 @@
 #include <fmt/core.h>
 
 #include "imgui_helpers.h"
+#include "imgui_internal.h"
 
 struct DebugVertex
 {
@@ -182,10 +183,24 @@ void RVPT::update_imgui()
         ImGui::PushItemWidth(80);
         ImGui::SliderInt("AA", &render_settings.aa, 1, 64);
         ImGui::SliderInt("Max Bounce", &render_settings.max_bounces, 1, 64);
-        if (ImGui::Button("Debug Raster")) toggle_debug();
-        ImGui::SameLine();
-        if (ImGui::Button("Wireframe")) toggle_wireframe_debug();
 
+        ImGui::Checkbox("Debug Raster", &debug_overlay_enabled);
+
+        // indent "Wireframe" checkbox, grayed out if debug raster disabled
+        if (!debug_overlay_enabled)
+        {
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+        }
+        ImGui::Indent();
+        ImGui::Checkbox("Wireframe", &debug_wireframe_mode);
+        ImGui::Unindent();
+        if (!debug_overlay_enabled)
+        {
+            ImGui::PopItemFlag();
+            ImGui::PopStyleVar();
+        }
+        
         static bool horizontal_split = false;
         static bool vertical_split = false;
         if (ImGui::Checkbox("Split", &horizontal_split))
