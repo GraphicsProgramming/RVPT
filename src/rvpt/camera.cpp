@@ -133,10 +133,8 @@ void Camera::update_imgui()
             ImGui::SliderFloat("scale", &scale, 0.1, 20);
         }
 
-        if (ImGui::RadioButton("Clamp Vertical Rot", vertical_view_angle_clamp))
-        {
-            vertical_view_angle_clamp = !vertical_view_angle_clamp;
-        }
+        ImGui::Checkbox("Clamp Vertical Rot", &vertical_view_angle_clamp);
+
         static bool show_view_matrix = false;
         ImGui::Checkbox("Show View Matrix", &show_view_matrix);
         if (show_view_matrix)
