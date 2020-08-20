@@ -5,6 +5,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 
 #include "geometry.h"
 
@@ -15,6 +16,8 @@ struct BvhNode
     BvhNode* left = nullptr;
     BvhNode* right = nullptr;
 
-    void split();
+    ~BvhNode();
+
+    void split(std::vector<std::vector<AABB>>& bounds, int depth, int max_depth);
     void expand(const glm::vec3& expansion);
 };

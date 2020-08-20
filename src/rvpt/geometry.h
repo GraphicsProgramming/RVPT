@@ -18,7 +18,6 @@ struct Sphere
     glm::vec3 origin;
     float radius;
     glm::vec4 material_id;
-    // glm::vec3 align;
 };
 
 struct Triangle
