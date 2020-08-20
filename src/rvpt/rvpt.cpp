@@ -142,6 +142,27 @@ bool RVPT::update()
             scene_camera.get_pv_matrix());
     }
 
+    if (debug_bvh_enabled)
+    {
+        std::vector<DebugVertex> bvh_debug_vertices;
+        bvh_debug_vertices.reserve(5);
+        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        bvh_debug_vertices.push_back({glm::vec3(2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        bvh_debug_vertices.push_back({glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        bvh_debug_vertices.push_back({glm::vec3(-2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        bvh_debug_vertices.push_back({glm::vec3(-2, 2, -2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 0)});
+        size_t debug_vert_size = bvh_debug_vertices.size() * sizeof(DebugVertex);
+        if (per_frame_data[current_frame_index].debug_bvh_vertex_buffer.size() < debug_vert_size)
+        {
+            per_frame_data[current_frame_index].debug_bvh_vertex_buffer = VK::Buffer(
+                vk_device, memory_allocator, "debug_bvh_buffer",
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, debug_vert_size, VK::MemoryUsage::cpu_to_gpu);
+        }
+        per_frame_data[current_frame_index].debug_bvh_vertex_buffer.copy_to(bvh_debug_vertices);
+        per_frame_data[current_frame_index].debug_bvh_camera_uniform.copy_to(scene_camera.get_pv_matrix());
+
+    }
+
     return true;
 }
 
@@ -199,6 +220,8 @@ void RVPT::update_imgui()
             ImGui::PopItemFlag();
             ImGui::PopStyleVar();
         }
+
+        if (ImGui::Button("BVH Debug")) toggle_bvh_debug();
 
         static bool horizontal_split = false;
         static bool vertical_split = false;
@@ -371,6 +394,7 @@ void RVPT::reload_shaders()
 
 void RVPT::toggle_debug() { debug_overlay_enabled = !debug_overlay_enabled; }
 void RVPT::toggle_wireframe_debug() { debug_wireframe_mode = !debug_wireframe_mode; }
+void RVPT::toggle_bvh_debug() { debug_bvh_enabled = !debug_bvh_enabled; }
 void RVPT::set_raytrace_mode(int mode) { render_settings.top_left_render_mode = mode; }
 
 // Private functions //
@@ -609,11 +633,53 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     debug_details.binding_desc = binding_desc;
     debug_details.attribute_desc = attribute_desc;
     debug_details.cull_mode = VK_CULL_MODE_NONE;
+    debug_details.primitive_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     debug_details.enable_depth = true;
 
     auto opaque = pipeline_builder.create_pipeline(debug_details);
     debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
     auto wireframe = pipeline_builder.create_pipeline(debug_details);
+
+    /*
+     * Start BVH Debug Setup
+     */
+
+    std::vector<VkDescriptorSetLayoutBinding> debug_bvh_layout_bindings = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}};
+
+    auto debug_bvh_descriptor_pool = VK::DescriptorPool(vk_device, debug_layout_bindings,
+                                                    MAX_FRAMES_IN_FLIGHT, "debug_bvh_descriptor_pool");
+    auto debug_bvh_pipeline_layout = pipeline_builder.create_layout({debug_descriptor_pool.layout()},
+                                                                {}, "debug_bvh_pipeline_layout");
+
+    std::vector<VkVertexInputBindingDescription> bvh_binding_desc = {
+        {0, sizeof(DebugVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
+
+    std::vector<VkVertexInputAttributeDescription> bvh_attribute_desc = {
+        {0, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 0},
+        {1, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 12},
+        {2, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 24}};
+
+    VK::GraphicsPipelineDetails bvh_debug_details;
+    bvh_debug_details.name = "debug_bvh_view_pipeline";
+    bvh_debug_details.pipeline_layout = debug_bvh_pipeline_layout;
+    bvh_debug_details.vert_shader = "debug_vis.vert.spv";
+    bvh_debug_details.frag_shader = "debug_vis.frag.spv";
+    bvh_debug_details.render_pass = fullscreen_tri_render_pass;
+    bvh_debug_details.extent = vkb_swapchain.extent;
+    bvh_debug_details.binding_desc = bvh_binding_desc;
+    bvh_debug_details.attribute_desc = bvh_attribute_desc;
+    bvh_debug_details.polygon_mode = VK_POLYGON_MODE_LINE;
+    bvh_debug_details.primitive_topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    bvh_debug_details.cull_mode = VK_CULL_MODE_NONE;
+    bvh_debug_details.enable_depth = true;
+
+
+    auto bvh_pipline = pipeline_builder.create_pipeline(bvh_debug_details);
+
+    /*
+     * End BVH Debug Setup
+     */
 
     auto temporal_storage_image = VK::Image(
         vk_device, memory_allocator, *graphics_queue, "temporal_storage_image",
@@ -640,6 +706,7 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
     return RVPT::RenderingResources{std::move(image_pool),
                                     std::move(raytrace_descriptor_pool),
                                     std::move(debug_descriptor_pool),
+                                    std::move(debug_bvh_descriptor_pool),
                                     fullscreen_triangle_pipeline_layout,
                                     fullscreen_triangle_pipeline,
                                     raytrace_pipeline_layout,
@@ -647,6 +714,8 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
                                     debug_pipeline_layout,
                                     opaque,
                                     wireframe,
+                                    debug_bvh_pipeline_layout,
+                                    bvh_pipline,
                                     std::move(temporal_storage_image),
                                     std::move(depth_image)};
 }
@@ -737,12 +806,31 @@ void RVPT::add_per_frame_data(int index)
     rendering_resources->debug_descriptor_pool.update_descriptor_sets(debug_descriptor_set,
                                                                       debug_descriptors);
 
+    // BVH vis
+    auto debug_bvh_vertex_buffer = VK::Buffer(
+        vk_device, memory_allocator, "debug_bvh_vertex_buffer_" + std::to_string(index),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 1000 * sizeof(DebugVertex), VK::MemoryUsage::cpu_to_gpu);
+
+    auto debug_bvh_camera_uniform = VK::Buffer(
+        vk_device, memory_allocator, "debug_bvh_camera_uniform_" + std::to_string(index),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(glm::mat4), VK::MemoryUsage::cpu_to_gpu);
+
+    auto debug_bvh_descriptor_set = rendering_resources->debug_bvh_descriptor_pool.allocate(
+        "debug_bvh_descriptor_set_" + std::to_string(index));
+
+    std::vector<VK::DescriptorUseVector> debug_bvh_descriptors;
+    debug_bvh_descriptors.push_back(std::vector{debug_bvh_camera_uniform.descriptor_info()});
+    rendering_resources->debug_bvh_descriptor_pool.update_descriptor_sets(debug_bvh_descriptor_set,
+                                                                      debug_bvh_descriptors);
+
     per_frame_data.push_back(RVPT::PerFrameData{
         std::move(settings_uniform), std::move(output_image), std::move(random_buffer),
         std::move(camera_uniform), std::move(sphere_buffer), std::move(triangle_buffer),
         std::move(material_buffer), std::move(raytrace_command_buffer),
         std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set,
-        std::move(debug_camera_uniform), std::move(debug_vertex_buffer), debug_descriptor_set});
+        std::move(debug_camera_uniform), std::move(debug_vertex_buffer),
+        debug_descriptor_set, std::move(debug_bvh_camera_uniform),
+        std::move(debug_bvh_vertex_buffer), debug_bvh_descriptor_set});
 }
 
 void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index)
@@ -814,6 +902,21 @@ void RVPT::record_command_buffer(VK::SyncResources& current_frame, uint32_t swap
         bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_vertex_buffer);
 
         vkCmdDraw(cmd_buf, (uint32_t)triangles.size() * 3, 1, 0, 0);
+    }
+
+    if (debug_bvh_enabled)
+    {
+        auto pipeline = pipeline_builder.get_pipeline(
+            rendering_resources->debug_bvh_pipeline);
+        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+        vkCmdBindDescriptorSets(
+            cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->debug_bvh_layout, 0,
+            1, &per_frame_data[current_frame_index].debug_bvh_descriptor_set.set, 0, nullptr);
+
+        bind_vertex_buffer(cmd_buf, per_frame_data[current_frame_index].debug_bvh_vertex_buffer);
+
+        vkCmdDraw(cmd_buf, (uint32_t) 5, 1, 0, 0);
     }
 
     if (show_imgui)

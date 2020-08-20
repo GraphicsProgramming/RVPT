@@ -6,23 +6,27 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
-set (source_files 
-    src/rvpt/main.cpp 
-    src/rvpt/rvpt.cpp 
-    src/rvpt/window.cpp 
-    src/rvpt/vk_util.cpp 
-    src/rvpt/imgui_impl.cpp
-    src/rvpt/camera.cpp 
-    src/rvpt/timer.cpp)
+set(source_files
+        src/rvpt/main.cpp
+        src/rvpt/rvpt.cpp
+        src/rvpt/window.cpp
+        src/rvpt/vk_util.cpp
+        src/rvpt/imgui_impl.cpp
+        ##	assets/shaders/fullscreen_tri.vert
+        ##	assets/shaders/tex_sample.frag
+        src/rvpt/camera.cpp
+        src/rvpt/timer.cpp
+        src/rvpt/bvh_node.cpp)
 
-set (header_files
-    src/rvpt/rvpt.h
-    src/rvpt/window.h
-    src/rvpt/vk_util.h
-    src/rvpt/imgui_impl.h
-    src/rvpt/camera.h
-    src/rvpt/timer.h
-    src/rvpt/geometry.h)
+set(header_files
+        src/rvpt/rvpt.h
+        src/rvpt/window.h
+        src/rvpt/vk_util.h
+        src/rvpt/imgui_impl.h
+        src/rvpt/camera.h
+        src/rvpt/timer.h
+        src/rvpt/geometry.h
+		src/rvpt/bvh_node.h)
 
 set (shader_files
     assets/shaders/camera.glsl
@@ -42,7 +46,6 @@ set (shader_files
 
 add_executable(rvpt ${source_files} ${header_files})
 
-
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rvpt)
 
 target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
@@ -52,18 +55,18 @@ target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_js
 if (DEBUG)
     if (WIN32)
         target_compile_options(rvpt PUBLIC /fsanitize=address)
-    else()
+    else ()
         target_compile_options(rvpt PUBLIC -fsanitize=address)
-    endif()
-endif()
+    endif ()
+endif ()
 
 # Determine whether we're compiling with clang++
 string(FIND "${CMAKE_CXX_COMPILER}" "clang++" RVPT_COMPILER_CLANGPP)
-if(RVPT_COMPILER_CLANGPP GREATER -1)
-  set(RVPT_COMPILER_CLANGPP 1)
-else()
-  set(RVPT_COMPILER_CLANGPP 0)
-endif()
+if (RVPT_COMPILER_CLANGPP GREATER -1)
+    set(RVPT_COMPILER_CLANGPP 1)
+else ()
+    set(RVPT_COMPILER_CLANGPP 0)
+endif ()
 
 target_compile_options(rvpt
         INTERFACE
@@ -80,22 +83,22 @@ target_compile_options(rvpt
 
 
 #compile shaders in assets/shaders
-if(WIN32)
-add_custom_target(compile-shaders ALL
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
-    COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.bat
-    DEPENDS ${shader_files})
-else(UNIX)
-add_custom_target(compile-shaders ALL
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
-    COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.sh
-    DEPENDS ${shader_files})
-endif()
+if (WIN32)
+    add_custom_target(compile-shaders ALL
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
+            COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.bat
+            DEPENDS rvpt)
+else (UNIX)
+    add_custom_target(compile-shaders ALL
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
+            COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.sh
+            DEPENDS rvpt)
+endif ()
 
 # copies files to the build folder
 add_custom_target(copy-asset-files ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
-    DEPENDS compile-shaders rvpt)
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
+        DEPENDS compile-shaders rvpt)
 
 add_dependencies(rvpt compile-shaders)
 
