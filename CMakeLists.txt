@@ -7,28 +7,41 @@ find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
 set (source_files 
-	src/rvpt/main.cpp 
-	src/rvpt/rvpt.cpp 
-	src/rvpt/window.cpp 
-	src/rvpt/vk_util.cpp 
-	src/rvpt/imgui_impl.cpp
-##	assets/shaders/fullscreen_tri.vert 
-##	assets/shaders/tex_sample.frag 
-	src/rvpt/camera.cpp 
-	src/rvpt/timer.cpp)
+    src/rvpt/main.cpp 
+    src/rvpt/rvpt.cpp 
+    src/rvpt/window.cpp 
+    src/rvpt/vk_util.cpp 
+    src/rvpt/imgui_impl.cpp
+    src/rvpt/camera.cpp 
+    src/rvpt/timer.cpp)
 
 set (header_files
-	src/rvpt/rvpt.h
-	src/rvpt/window.h
-	src/rvpt/vk_util.h
-	src/rvpt/imgui_impl.h
-	src/rvpt/camera.h
-	src/rvpt/timer.h
-	src/rvpt/geometry.h)
+    src/rvpt/rvpt.h
+    src/rvpt/window.h
+    src/rvpt/vk_util.h
+    src/rvpt/imgui_impl.h
+    src/rvpt/camera.h
+    src/rvpt/timer.h
+    src/rvpt/geometry.h)
+
+set (shader_files
+    assets/shaders/camera.glsl
+    assets/shaders/compute_pass.comp
+    assets/shaders/debug_vis.frag
+    assets/shaders/debug_vis.vert
+    assets/shaders/distance_functions.glsl
+    assets/shaders/fullscreen_tri.vert
+    assets/shaders/integrators.glsl
+    assets/shaders/intersection.glsl
+    assets/shaders/material.glsl
+    assets/shaders/samples_mapping.glsl
+    assets/shaders/structs.glsl
+    assets/shaders/tex_sample.frag
+    assets/shaders/util.glsl
+)
 
 add_executable(rvpt ${source_files} ${header_files})
-##    src/rvpt/main.cpp src/rvpt/rvpt.cpp src/rvpt/window.cpp src/rvpt/vk_util.cpp src/rvpt/imgui_impl.cpp
-##    assets/shaders/fullscreen_tri.vert assets/shaders/tex_sample.frag src/rvpt/camera.cpp src/rvpt/timer.cpp)
+
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rvpt)
 
@@ -71,18 +84,20 @@ if(WIN32)
 add_custom_target(compile-shaders ALL
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
     COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.bat
-    DEPENDS rvpt)
+    DEPENDS ${shader_files})
 else(UNIX)
 add_custom_target(compile-shaders ALL
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
     COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.sh
-    DEPENDS rvpt)
+    DEPENDS ${shader_files})
 endif()
 
 # copies files to the build folder
 add_custom_target(copy-asset-files ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
     DEPENDS compile-shaders rvpt)
+
+add_dependencies(rvpt compile-shaders)
 
 # sets up path to source directory, useful for shader hot reloading
 configure_file (
