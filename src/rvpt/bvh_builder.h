@@ -13,15 +13,15 @@
 class BvhBuilder
 {
 public:
-    enum Type
+    enum BvhType
     {
         BottomTop
     };
 
-    BvhBuilder(Type type);
+    BvhBuilder(BvhType type);
 
-    BvhBuilder::Type bvh_build_type;
+    BvhBuilder::BvhType bvh_build_type;
 
-    BvhNode* build_global_bvh(std::vector<AABB>& bounding_boxes,
+    BvhNode* build_global_bvh(std::vector<AABB>& bounding_boxes_no_depth, std::vector<std::vector<AABB>>& bounding_boxes_with_depth,
                                           const std::vector<Triangle>& triangle_primitives);
 };

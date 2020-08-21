@@ -28,7 +28,8 @@ set(header_files
         src/rvpt/timer.h
         src/rvpt/geometry.h
 		src/rvpt/bvh_node.h
-        src/rvpt/bvh_builder.h)
+        src/rvpt/bvh_builder.h
+        )
 
 add_executable(rvpt ${source_files} ${header_files})
 ##    src/rvpt/main.cpp src/rvpt/rvpt.cpp src/rvpt/window.cpp src/rvpt/vk_util.cpp src/rvpt/imgui_impl.cpp
