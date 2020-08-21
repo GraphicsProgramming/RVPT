@@ -36,6 +36,22 @@ struct Triangle
     glm::vec4 material_id{};
 };
 
+struct GpuBvhNode
+{
+    float min_x;
+    float min_y;
+    float min_z;
+    float max_x;
+    float max_y;
+    float max_z;
+    unsigned int left_index = std::numeric_limits<unsigned int>::max();
+    unsigned int right_index = std::numeric_limits<unsigned int>::max();
+    unsigned int parent_index = std::numeric_limits<unsigned int>::max();
+    unsigned int primitive_index = std::numeric_limits<unsigned int>::max();
+    unsigned int primitive_count = std::numeric_limits<unsigned int>::max();
+    bool visited = false;
+};
+
 struct AABB
 {
     AABB() = default;

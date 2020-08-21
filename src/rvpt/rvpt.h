@@ -29,6 +29,9 @@ static const char* RenderModes[] = {"binary",       "color",          "depth",
                                     "Arthur Appel", "Turner Whitted", "Robert Cook",
                                     "James Kajiya", "John Hart"};
 
+const std::vector<glm::vec3> colors = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0, 0, 0},   {1, .5, 0},
+                      {1, 0, 1}, {1, 1, 0}, {1, 1, 1}, {.5, .25, 0}};
+
 class RVPT
 {
 public:
@@ -110,19 +113,24 @@ private:
 
     // BVH AABB's
     BvhBuilder bvh_builder;
-    std::vector<AABB> depth_bvh_bounds;
+    BvhNode* tl_bvh; // Highest level BVH
+    std::vector<std::vector<AABB>> depth_bvh_bounds;
     size_t bvh_vertex_count = 0;
     int max_bvh_build_depth = 5;
     int max_bvh_view_depth = 2;
     bool view_previous_depths = true;
-    // Yes I know, I have an extra set of the AABB's, I did this so instead of recursively going through
-    // every. single. node. To setup the vertices for the debug view, we only have to do go through them once
-    // which means the split function actually takes a pointer to this, and uploads it's own AABB to the vector every time it gets "split"
-    // If you have a better solution for this be my guest. Make a pull request and tell me how, because I can't think of a better solution
-    // At least not a better one that I would be able to write in an okay amount of time.
+    bool does_bvh_support_depth_viewing = false;
+    // Yes I know, I have an extra set of the AABB's, I did this so instead of recursively going
+    // through every. single. node. To setup the vertices for the debug view, we only have to do go
+    // through them once which means the split function actually takes a pointer to this, and
+    // uploads it's own AABB to the vector every time it gets "split" If you have a better solution
+    // for this be my guest. Make a pull request and tell me how, because I can't think of a better
+    // solution At least not a better one that I would be able to write in an okay amount of time.
 
+    std::vector<GpuBvhNode> gpu_bvh_nodes;
     std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
+    std::vector<Triangle> sorted_triangles;
     std::vector<Material> materials;
 
     struct PreviousFrameState
@@ -197,7 +205,7 @@ private:
         VK::Image output_image;
         VK::Buffer random_buffer;
         VK::Buffer camera_uniform;
-//        VK::Buffer bvh_buffer;
+        VK::Buffer bvh_buffer;
         VK::Buffer sphere_buffer;
         VK::Buffer triangle_buffer;
         VK::Buffer material_buffer;
