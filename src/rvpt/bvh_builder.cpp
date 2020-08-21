@@ -4,9 +4,9 @@
 
 #include "bvh_builder.h"
 
-BvhBuilder::BvhBuilder(Type type) : bvh_build_type(type) {}
+BvhBuilder::BvhBuilder(BvhType type) : bvh_build_type(type) {}
 
-BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
+BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes_no_depth, std::vector<std::vector<AABB>>& bounding_boxes_with_depth,
                                                   const std::vector<Triangle> &triangle_primitives)
 {
     BvhNode* ret;
@@ -33,8 +33,8 @@ BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
                          fmaxf(fmaxf(triangle.vertex0.x, triangle.vertex1.x), triangle.vertex2.x),
                          fmaxf(fmaxf(triangle.vertex0.y, triangle.vertex1.y), triangle.vertex2.y),
                          fmaxf(fmaxf(triangle.vertex0.z, triangle.vertex1.z), triangle.vertex2.z));
-                bounding_boxes.push_back(base_bounding_boxes[i]);
             }
+            bounding_boxes_with_depth.push_back(base_bounding_boxes);
 
             std::vector<BvhNode*> current_nodes;
             std::vector<BvhNode*> next_nodes;
@@ -43,6 +43,7 @@ BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
             {
                 current_nodes[i] = new BvhNode();
                 current_nodes[i]->bounds = base_bounding_boxes[i];
+                current_nodes[i]->triangles.push_back(triangle_primitives[i]);
             }
 
             while (current_nodes.size() > 1)
@@ -55,6 +56,7 @@ BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
 
                 if (currently_hittable == 1) break;
 
+                std::vector<AABB> layer_bounds;
                 for (size_t i = 0; i < current_nodes.size(); i++)
                 {
                     // This is meant as a check to see if we can use this in the current bvh depth
@@ -101,7 +103,7 @@ BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
                                 next_nodes[next_node_index]->right->bounds.min);
                             next_nodes[next_node_index]->bounds.expand(
                                 next_nodes[next_node_index]->right->bounds.max);
-                            bounding_boxes.push_back(next_nodes[next_node_index]->bounds);
+                            layer_bounds.push_back(next_nodes[next_node_index]->bounds);
                         }
                     }
                     else // In the case it isn't, just pass it directly to the higher level of the tree
@@ -109,6 +111,9 @@ BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes,
                         next_nodes.push_back(current_nodes[i]);
                     }
                 }
+
+                bounding_boxes_with_depth.insert(bounding_boxes_with_depth.begin(), layer_bounds);
+                layer_bounds.clear();
                 current_nodes = next_nodes;
                 next_nodes.clear();
             }

@@ -28,7 +28,8 @@ set(header_files
         src/rvpt/timer.h
         src/rvpt/geometry.h
 		src/rvpt/bvh_node.h
-        src/rvpt/bvh_builder.h)
+        src/rvpt/bvh_builder.h
+        )
 
 set (shader_files
     assets/shaders/camera.glsl

@@ -502,7 +502,11 @@ bool intersect_scene
 		closest_t = min(temp_isect.t, closest_t);
 	}
 
+	/* Intersect BVHs and get the primitives that are possibly intersected (Triangles Only) */
+
+
 	/* intersect triangles */
+	/*
 	for (int i = 0; i < triangles.length(); i++)
 	{
 		Triangle triangle = triangles[i];
@@ -520,8 +524,8 @@ bool intersect_scene
 			info.mat = convert_old_material(mat);
 		}
 		closest_t = min(temp_isect.t, closest_t);
-	}
-	
+	}*/
+
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
 					
 	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);

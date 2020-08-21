@@ -15,8 +15,18 @@ struct Triangle
 
 struct BVH
 {
-    vec4 min; // W components are unused
-    vec4 max;
+    float min_x;
+    float min_y;
+    float min_z;
+    float max_x;
+    float max_y;
+    float max_z;
+    uint left_index;
+    uint right_index;
+    uint parent_index;
+    uint triangle_index;
+    uint triangle_count;
+    bool visited;
 };
 
 struct Ray
@@ -30,12 +40,12 @@ struct Material
     vec4 albedo;
     vec4 emission;
     vec4 data;
-    /*
-    data.x = Type (Glass, Lambert, Dynamic)
-    data.y = Glass Refractive Index OR Dynamic difusse
-    data.z = Dynamic reflectiveness
-    data.w = Unused
-    */
+/*
+data.x = Type (Glass, Lambert, Dynamic)
+data.y = Glass Refractive Index OR Dynamic difusse
+data.z = Dynamic reflectiveness
+data.w = Unused
+*/
 };
 
 struct Record
