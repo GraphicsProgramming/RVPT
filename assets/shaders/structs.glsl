@@ -26,7 +26,7 @@ struct BVH
     uint parent_index;
     uint triangle_index;
     uint triangle_count;
-    bool visited;
+    int times_visited;
 };
 
 struct Ray

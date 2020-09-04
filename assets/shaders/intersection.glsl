@@ -411,6 +411,164 @@ bool intersect_triangle_fast
 
 /*--------------------------------------------------------------------------*/
 
+bool intersect_bvh
+
+	(Ray       ray, /* ray for the intersection */
+	 BVH       bvh)	/* bvh to test intersection against */
+
+/*
+	Returns true if there is an intersection with the passed in BVH's AABB.
+
+	For the derivation see the appendix. (Todo)
+*/
+{
+	/* Inverse transform on the ray */
+	vec3 inv_ray_dir = vec3(1 / ray.direction.x, 1 / ray.direction.y, 1 / ray.direction.z);
+
+	double tx0 = (bvh.min_x - ray.origin.x) * inv_ray_dir.x;
+	double tx1 = (bvh.max_x - ray.origin.x) * inv_ray_dir.x;
+
+	double tmin = min(tx0, tx1);
+	double tmax = max(tx0, tx1);
+
+	double ty0 = (bvh.min_y - ray.origin.y) * inv_ray_dir.y;
+	double ty1 = (bvh.max_y - ray.origin.y) * inv_ray_dir.y;
+
+	tmin = max(tmin, min(ty0, ty1));
+	tmax = min(tmax, max(ty0, ty1));
+
+	double tz0 = (bvh.min_z - ray.origin.z) * inv_ray_dir.z;
+	double tz1 = (bvh.max_z - ray.origin.z) * inv_ray_dir.z;
+
+	tmin = max(tmin, min(tz0, tz1));
+	tmax = min(tmax, max(tz0, tz1));
+
+	return tmax >= tmin && tmax > 0;
+
+} /* intersect_bvh */
+
+/*--------------------------------------------------------------------------*/
+
+bool intersect_aabb
+
+	(Ray       ray,  	   /* ray for the intersection */
+	 vec3      aabb_min,   /* min vertex */
+	 vec3      aabb_max)   /* max vertex */
+
+/*
+	Returns true if there is an intersection with the AABB (min,max).
+
+	For the derivation see the appendix. (Todo)
+*/
+{
+
+	/* Inverse transform on the ray */
+	vec3 inv_ray_dir = vec3(1 / ray.direction.x, 1 / ray.direction.y, 1 / ray.direction.z);
+
+	double tx0 = (aabb_min.x - ray.origin.x) * inv_ray_dir.x;
+	double tx1 = (aabb_max.x - ray.origin.x) * inv_ray_dir.x;
+
+	double tmin = min(tx0, tx1);
+	double tmax = max(tx0, tx1);
+
+	double ty0 = (aabb_min.y - ray.origin.y) * inv_ray_dir.y;
+	double ty1 = (aabb_max.y - ray.origin.y) * inv_ray_dir.y;
+
+	tmin = max(tmin, min(ty0, ty1));
+	tmax = min(tmax, max(ty0, ty1));
+
+	double tz0 = (aabb_min.z - ray.origin.z) * inv_ray_dir.z;
+	double tz1 = (aabb_max.z - ray.origin.z) * inv_ray_dir.z;
+
+	tmin = max(tmin, min(tz0, tz1));
+	tmax = min(tmax, max(tz0, tz1));
+
+	return tmax >= tmin && tmax > 0;
+
+} /* intersect_aabb */
+
+/*--------------------------------------------------------------------------*/
+
+bool global_bvh_intersect_ray(in Ray ray, float mint, float maxt, out Isect info)
+{
+
+	/*
+	
+	*/
+
+	float closest_t = INF;
+	info.t = closest_t;
+	info.pos = vec3(0);
+	info.normal = vec3(0);
+	Isect temp_isect;
+
+	bool intersect;
+
+	uint current_bvh_index = 0;
+	uint previous_bvh_index = 0;
+
+
+
+	/*
+	while (true)
+	{
+		BVH current = bvhs[current_bvh_index];
+		if (current.times_visited == 0) current.parent_index = previous_bvh_index;
+		current.times_visited = current.times_visited + 1;
+		previous_bvh_index = current_bvh_index;
+
+		if (intersect_bvh(ray, current))
+		{ // We hit the current BVH
+			if (current.times_visited < 0)
+			{ // It's a leaf node
+
+				// Todo: Intersect the actual shapes in the node
+
+				for (uint i = current.triangle_index; i < current.triangle_count + current.triangle_index; i++)
+				{
+					Triangle triangle = triangles[i];
+					intersect_triangle_fast(ray,
+					triangle.vert0.xyz,
+					triangle.vert1.xyz,
+					triangle.vert2.xyz,
+					mint,
+					closest_t,
+					temp_isect);
+					if (temp_isect.t<closest_t)
+					{
+						info = temp_isect;
+						Material mat = materials[int(triangle.mat_id.x)];
+						info.mat = convert_old_material(mat);
+					}
+					closest_t = min(temp_isect.t, closest_t);
+				}
+
+				current_bvh_index = current.parent_index; // Go back once we finish intersecting
+			}
+			else
+			{ // We're not in a leaf node, go to the left if it's the first time we're here, else go to the right
+				if (current.times_visited < 3)
+				{ // Set the next index to the child if we've visited less than 3 times
+					current_bvh_index = current.left_index == 1 ? current.left_index : current.right_index;
+				}
+				else
+				{ // If we've visited this node 3 times, we go to it's parent
+					current_bvh_index = current.parent_index;
+				}
+			}
+		}
+		else
+		{ // We didn't hit the current BVH, go back or break if we're at the top level BVH
+			if (current.parent_index == 0) break; // Break if we're at the top of the BVH
+			current_bvh_index = current.parent_index; // Go to the previous BVH otherwise
+		}
+	}*/
+
+	return intersect;
+}
+
+/*--------------------------------------------------------------------------*/
+
 bool intersect_scene_any
 
 	(Ray   ray,  /* ray for the intersection */
@@ -506,6 +664,7 @@ bool intersect_scene
 
 
 	/* intersect triangles */
+
 	/*
 	for (int i = 0; i < triangles.length(); i++)
 	{
@@ -524,12 +683,15 @@ bool intersect_scene
 			info.mat = convert_old_material(mat);
 		}
 		closest_t = min(temp_isect.t, closest_t);
-	}*/
+	}
+//	*/
 
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
 					
 	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
-	
+
+	global_bvh_intersect_ray(ray, 0, 0, temp_isect);
+
 	return closest_t<INF;
 	
 } /* intersect_scene */
