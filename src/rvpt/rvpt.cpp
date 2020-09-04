@@ -121,6 +121,7 @@ bool RVPT::initialize()
         {
             gpu_bvh_node.primitive_index = sorted_triangles.size();
             gpu_bvh_node.primitive_count = node->triangles.size();
+            gpu_bvh_node.times_visited = -10000;
 
             sorted_triangles.reserve(sorted_triangles.size() + node->triangles.size());
             for (const auto& triangle : node->triangles) sorted_triangles.push_back(triangle);
