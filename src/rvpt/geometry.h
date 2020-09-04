@@ -49,7 +49,7 @@ struct GpuBvhNode
     unsigned int parent_index = std::numeric_limits<unsigned int>::max();
     unsigned int primitive_index = std::numeric_limits<unsigned int>::max();
     unsigned int primitive_count = std::numeric_limits<unsigned int>::max();
-    bool visited = false;
+    int times_visited = 0;
 };
 
 struct AABB

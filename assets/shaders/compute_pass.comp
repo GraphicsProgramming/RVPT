@@ -2,7 +2,24 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_scalar_block_layout : require
 
-#include "defines.glsl"
+#define PI 3.1415926535897932384626433832795
+#define RAY_MIN_DIST 0.01
+#define EPSILON 0.005
+#define MARCH_ITER 32
+#define MARCH_EPS 0.1
+#define INF 1.0/0.0
+
+#define UINT_8_MAX 255
+#define UINT_16_MAX 65535
+#define UINT_32_MAX 4294967295
+
+#define INT_8_MAX 127
+#define INT_16_MAX 32767
+#define INT_32_MAX 2147483647
+
+#define INT_8_MIN -127
+#define INT_16_MIN -32767
+#define INT_32_MIN -2147483647
 #include "structs.glsl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -39,7 +56,6 @@ layout(std430, binding = 8) buffer Materials { Material materials[]; };
 #include "util.glsl"
 #include "camera.glsl"
 #include "samples_mapping.glsl"
-#include "bvh.glsl"
 #include "intersection.glsl"
 #include "distance_functions.glsl"
 #include "material.glsl"
