@@ -107,8 +107,8 @@ bool RVPT::initialize()
         return total_nodes;
     }());
 
-    auto add_gpu_bvh_node = std::function<void(BvhNode*)>();
-    add_gpu_bvh_node = [&](BvhNode* node) {
+    auto add_gpu_bvh_node = std::function<void(BvhNode*, size_t)>();
+    add_gpu_bvh_node = [&](BvhNode* node, size_t parent_index) {
         GpuBvhNode gpu_bvh_node;
 
         gpu_bvh_node.min_x = node->bounds.min.x;
@@ -118,11 +118,17 @@ bool RVPT::initialize()
         gpu_bvh_node.max_y = node->bounds.max.y;
         gpu_bvh_node.max_z = node->bounds.max.z;
 
+        gpu_bvh_node.parent_index = parent_index;
+
+        size_t gpu_node_index = gpu_bvh_nodes.size();
+
         if (node->is_leaf())
         {
             gpu_bvh_node.primitive_index = sorted_triangles.size();
             gpu_bvh_node.primitive_count = node->triangles.size();
             gpu_bvh_node.times_visited = -10000;
+
+            gpu_bvh_nodes.push_back(gpu_bvh_node);
 
             sorted_triangles.reserve(sorted_triangles.size() + node->triangles.size());
             for (const auto& triangle : node->triangles) sorted_triangles.push_back(triangle);
@@ -131,14 +137,14 @@ bool RVPT::initialize()
         {
             gpu_bvh_nodes.push_back(gpu_bvh_node);
             gpu_bvh_node.left_index = gpu_bvh_nodes.size();
-            add_gpu_bvh_node(node->left);
+            add_gpu_bvh_node(node->left, gpu_node_index);
 
             gpu_bvh_node.right_index = gpu_bvh_nodes.size();
-            add_gpu_bvh_node(node->right);
+            add_gpu_bvh_node(node->right, gpu_node_index);
         }
     };
 
-    add_gpu_bvh_node(tl_bvh);
+    add_gpu_bvh_node(tl_bvh, 0);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {

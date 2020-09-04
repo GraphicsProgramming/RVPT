@@ -21,9 +21,9 @@ struct BVH
     float max_x;
     float max_y;
     float max_z;
-    uint left_index;
-    uint right_index;
-    uint parent_index;
+    uint left;
+    uint right;
+    uint parent;
     uint triangle_index;
     uint triangle_count;
     int times_visited;
