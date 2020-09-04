@@ -502,67 +502,59 @@ bool global_bvh_intersect_ray(in Ray ray, float mint, float maxt, out Isect info
 	info.normal = vec3(0);
 	Isect temp_isect;
 
-	bool intersect;
+	bool intersect = false;
 
-	uint current_bvh_index = 0;
-	uint previous_bvh_index = 0;
-
+	uint next_bvh_index = 0;
 
 
-	/*
+	// Divergance for this code is going to be horrible, and this should not be looked at as model code
+	// If you have any suggestions / changes you want to contribute. Please do...
+
 	while (true)
 	{
-		BVH current = bvhs[current_bvh_index];
-		if (current.times_visited == 0) current.parent_index = previous_bvh_index;
-		current.times_visited = current.times_visited + 1;
-		previous_bvh_index = current_bvh_index;
+		BVH current = bvhs[next_bvh_index];
+		if (current.times_visited >= 0)
+		{ // We're in a non-child node, and we need to traverse this
 
-		if (intersect_bvh(ray, current))
-		{ // We hit the current BVH
-			if (current.times_visited < 0)
-			{ // It's a leaf node
+			// We're at the top level one and we've come back to the start
+			if (current.times_visited >= 2)
+			{
+				if (current.parent + next_bvh_index == 0) break;
+				next_bvh_index = current.parent;
+			}
 
-				// Todo: Intersect the actual shapes in the node
-
-				for (uint i = current.triangle_index; i < current.triangle_count + current.triangle_index; i++)
-				{
-					Triangle triangle = triangles[i];
-					intersect_triangle_fast(ray,
-					triangle.vert0.xyz,
-					triangle.vert1.xyz,
-					triangle.vert2.xyz,
-					mint,
-					closest_t,
-					temp_isect);
-					if (temp_isect.t<closest_t)
-					{
-						info = temp_isect;
-						Material mat = materials[int(triangle.mat_id.x)];
-						info.mat = convert_old_material(mat);
-					}
-					closest_t = min(temp_isect.t, closest_t);
-				}
-
-				current_bvh_index = current.parent_index; // Go back once we finish intersecting
+			if (intersect_aabb(
+				ray,
+				vec3(current.min_x, current.min_y, current.min_z),
+				vec3(current.max_x, current.max_y, current.max_z)))
+			{ // We hit this node, nice...
+				 next_bvh_index = current.times_visited == 0 ? current.left : current.right;
 			}
 			else
-			{ // We're not in a leaf node, go to the left if it's the first time we're here, else go to the right
-				if (current.times_visited < 3)
-				{ // Set the next index to the child if we've visited less than 3 times
-					current_bvh_index = current.left_index == 1 ? current.left_index : current.right_index;
-				}
-				else
-				{ // If we've visited this node 3 times, we go to it's parent
-					current_bvh_index = current.parent_index;
-				}
+			{ // We didn't hit, not nice... Let's go back up
+				next_bvh_index = current.parent;
 			}
 		}
 		else
-		{ // We didn't hit the current BVH, go back or break if we're at the top level BVH
-			if (current.parent_index == 0) break; // Break if we're at the top of the BVH
-			current_bvh_index = current.parent_index; // Go to the previous BVH otherwise
+		{ // We're in a child node, intersect it's primitives and such
+
+			if (intersect_aabb(
+			ray,
+			vec3(current.min_x, current.min_y, current.min_z),
+			vec3(current.max_x, current.max_y, current.max_z)
+			))
+			{
+				info.mat = convert_old_material(Material(vec4(0, 0, 0, 0), vec4(0, 0, 0, 0), vec4(1, 0, 0, 0)));
+				intersect = true;
+				break;
+			}
+			else
+			{
+				next_bvh_index = current.parent;
+			}
 		}
-	}*/
+		current.times_visited = current.times_visited + 1;
+	}
 
 	return intersect;
 }
@@ -690,7 +682,10 @@ bool intersect_scene
 					
 	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
 
-	global_bvh_intersect_ray(ray, 0, 0, temp_isect);
+	if (global_bvh_intersect_ray(ray, 0, 0, temp_isect))
+	{
+		info.mat = convert_old_material(Material(vec4(0, 0, 0, 0), vec4(0, 0, 0, 0), vec4(1, 0, 0, 0)));
+	}
 
 	return closest_t<INF;
 	
