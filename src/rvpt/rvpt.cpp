@@ -48,7 +48,6 @@ RVPT::RVPT(Window& window)
     }
 
     random_numbers.resize(20480);
-
 }
 
 RVPT::~RVPT() {}
@@ -66,7 +65,7 @@ bool RVPT::initialize()
         sync_resources.emplace_back(vk_device, graphics_queue.value(), present_queue.value(),
                                     vkb_swapchain.swapchain);
     }
-    frames_inflight_fences.resize(vkb_swapchain.image_count, nullptr);
+    frames_inflight_fences.resize(vkb_swapchain.image_count, VK_NULL_HANDLE);
 
     fullscreen_tri_render_pass = VK::create_render_pass(
         vk_device, vkb_swapchain.image_format,
@@ -200,7 +199,7 @@ void RVPT::update_imgui()
             ImGui::PopItemFlag();
             ImGui::PopStyleVar();
         }
-        
+
         static bool horizontal_split = false;
         static bool vertical_split = false;
         if (ImGui::Checkbox("Split", &horizontal_split))
@@ -278,7 +277,7 @@ RVPT::draw_return RVPT::draw()
     }
     record_command_buffer(current_frame, swapchain_image_index);
 
-    if (frames_inflight_fences[swapchain_image_index] != nullptr)
+    if (frames_inflight_fences[swapchain_image_index] != VK_NULL_HANDLE)
     {
         vkWaitForFences(vk_device, 1, &frames_inflight_fences[swapchain_image_index], VK_TRUE,
                         UINT64_MAX);
@@ -862,20 +861,11 @@ void RVPT::record_compute_command_buffer()
     command_buffer.end();
 }
 
-void RVPT::add_material(Material material)
-{
-    materials.emplace_back(material);
-}
+void RVPT::add_material(Material material) { materials.emplace_back(material); }
 
-void RVPT::add_sphere(Sphere sphere)
-{
-    spheres.emplace_back(sphere);
-}
+void RVPT::add_sphere(Sphere sphere) { spheres.emplace_back(sphere); }
 
-void RVPT::add_triangle(Triangle triangle)
-{
-    triangles.emplace_back(triangle);
-}
+void RVPT::add_triangle(Triangle triangle) { triangles.emplace_back(triangle); }
 
 void RVPT::get_asset_path(std::string& asset_path)
 {

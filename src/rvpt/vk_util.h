@@ -75,9 +75,9 @@ public:
     }
     ~HandleWrapper()
     {
-        if (handle != nullptr)
+        if (handle != VK_NULL_HANDLE)
         {
-            deleter(device, handle, nullptr);
+            deleter(device, handle, VK_NULL_HANDLE);
         }
     };
     HandleWrapper(HandleWrapper const& other) = delete;
@@ -86,13 +86,13 @@ public:
     HandleWrapper(HandleWrapper&& other) noexcept
         : device(other.device), handle(other.handle), deleter(other.deleter)
     {
-        other.handle = nullptr;
+        other.handle = VK_NULL_HANDLE;
     }
     HandleWrapper& operator=(HandleWrapper&& other) noexcept
     {
         if (this != &other)
         {
-            if (handle != nullptr)
+            if (handle != VK_NULL_HANDLE)
             {
                 deleter(device, handle, nullptr);
             }
@@ -100,7 +100,7 @@ public:
             device = other.device;
             handle = other.handle;
             deleter = other.deleter;
-            other.handle = nullptr;
+            other.handle = VK_NULL_HANDLE;
         }
         return *this;
     }
@@ -365,7 +365,7 @@ struct PipelineBuilder
 
 private:
     VkDevice device = nullptr;
-    VkPipelineCache cache = nullptr;
+    VkPipelineCache cache = VK_NULL_HANDLE;
     std::string source_folder = "";
 
     std::vector<VkPipelineLayout> layouts;
@@ -383,7 +383,15 @@ enum class MemoryUsage
     gpu_to_cpu,
     cpu_copy
 };
-
+namespace MemoryCategory
+{
+struct Image
+{
+};
+struct Buffer
+{
+};
+}  // namespace MemoryCategory
 class MemoryAllocator
 {
 public:
@@ -392,13 +400,16 @@ public:
 
     void shutdown();
 
-    template <typename T>
+    template <typename T, typename Category>
     struct Allocation
     {
-        Allocation(MemoryAllocator* memory_ptr, T data) : memory_ptr(memory_ptr), data(data) {}
+        Allocation(MemoryAllocator* memory_ptr, T data, [[maybe_unused]] Category cat)
+            : memory_ptr(memory_ptr), data(data)
+        {
+        }
         ~Allocation()
         {
-            if (data != VK_NULL_HANDLE) memory_ptr->free(data);
+            if (data != VK_NULL_HANDLE) memory_ptr->free(data, Category{});
         }
 
         Allocation(Allocation const& other) noexcept = delete;
@@ -412,7 +423,7 @@ public:
         {
             if (this != &other)
             {
-                if (data != VK_NULL_HANDLE) memory_ptr->free(data);
+                if (data != VK_NULL_HANDLE) memory_ptr->free(data, Category{});
                 memory_ptr = other.memory_ptr;
                 data = other.data;
                 other.data = VK_NULL_HANDLE;
@@ -424,11 +435,15 @@ public:
         T data;
     };
 
-    Allocation<VkImage> allocate_image(VkImage image, VkDeviceSize size, MemoryUsage usage);
-    Allocation<VkBuffer> allocate_buffer(VkBuffer buffer, VkDeviceSize size, MemoryUsage usage);
+    Allocation<VkImage, MemoryCategory::Image> allocate_image(
+        VkImage image, VkDeviceSize size, MemoryUsage usage,
+        MemoryCategory::Image category_tag = {});
+    Allocation<VkBuffer, MemoryCategory::Buffer> allocate_buffer(
+        VkBuffer buffer, VkDeviceSize size, MemoryUsage usage,
+        MemoryCategory::Buffer category_tag = {});
 
-    void free(VkImage image);
-    void free(VkBuffer buffer);
+    void free(VkImage image, MemoryCategory::Image category_tag = {});
+    void free(VkBuffer buffer, MemoryCategory::Buffer category_tag = {});
 
     void map(VkBuffer buffer, void** data_ptr);
     void unmap(VkBuffer buffer);
@@ -485,7 +500,7 @@ public:
 
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkImage, PFN_vkDestroyImage> image;
-    MemoryAllocator::Allocation<VkImage> image_allocation;
+    MemoryAllocator::Allocation<VkImage, MemoryCategory::Image> image_allocation;
     HandleWrapper<VkImageView, PFN_vkDestroyImageView> image_view;
     HandleWrapper<VkSampler, PFN_vkDestroySampler> sampler;
 
@@ -528,7 +543,7 @@ public:
 private:
     MemoryAllocator* memory_ptr;
     HandleWrapper<VkBuffer, PFN_vkDestroyBuffer> buffer;
-    MemoryAllocator::Allocation<VkBuffer> buffer_allocation;
+    MemoryAllocator::Allocation<VkBuffer, MemoryCategory::Buffer> buffer_allocation;
 
     VkDeviceSize buf_size;
     bool is_mapped = false;
