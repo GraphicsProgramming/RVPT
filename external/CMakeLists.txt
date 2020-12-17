@@ -17,7 +17,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     vk_bootstrap
     GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap
-    GIT_TAG        v0.1
+    GIT_TAG        c02642843c7d5bf07909fca72f63c394a28118db
 )
 FetchContent_Declare(
     glm

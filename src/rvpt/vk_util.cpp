@@ -859,9 +859,8 @@ void MemoryAllocator::shutdown()
     buffer_allocations.clear();
 }
 
-MemoryAllocator::Allocation<VkImage> MemoryAllocator::allocate_image(VkImage image,
-                                                                     VkDeviceSize size,
-                                                                     MemoryUsage usage)
+MemoryAllocator::Allocation<VkImage, MemoryCategory::Image> MemoryAllocator::allocate_image(
+    VkImage image, VkDeviceSize size, MemoryUsage usage, MemoryCategory::Image category)
 {
     VkMemoryRequirements memory_requirements;
     vkGetImageMemoryRequirements(device, image, &memory_requirements);
@@ -875,12 +874,11 @@ MemoryAllocator::Allocation<VkImage> MemoryAllocator::allocate_image(VkImage ima
 
     InternalAllocation alloc{memory_requirements.size, std::move(device_memory)};
     image_allocations.emplace_back(image, std::move(alloc));
-    return Allocation(this, image);
+    return Allocation(this, image, MemoryCategory::Image{});
 }
 
-MemoryAllocator::Allocation<VkBuffer> MemoryAllocator::allocate_buffer(VkBuffer buffer,
-                                                                       VkDeviceSize size,
-                                                                       MemoryUsage usage)
+MemoryAllocator::Allocation<VkBuffer, MemoryCategory::Buffer> MemoryAllocator::allocate_buffer(
+    VkBuffer buffer, VkDeviceSize size, MemoryUsage usage, MemoryCategory::Buffer category)
 {
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, buffer, &memory_requirements);
@@ -895,10 +893,10 @@ MemoryAllocator::Allocation<VkBuffer> MemoryAllocator::allocate_buffer(VkBuffer 
     InternalAllocation alloc{memory_requirements.size, std::move(device_memory)};
     buffer_allocations.emplace_back(buffer, std::move(alloc));
 
-    return Allocation(this, buffer);
+    return Allocation(this, buffer, MemoryCategory::Buffer{});
 }
 
-void MemoryAllocator::free(VkImage image)
+void MemoryAllocator::free(VkImage image, MemoryCategory::Image category_tag)
 {
     auto it = std::find_if(std::begin(image_allocations), std::end(image_allocations),
                            [&](auto const& elem) { return elem.first == image; });
@@ -907,7 +905,7 @@ void MemoryAllocator::free(VkImage image)
         image_allocations.erase(it);
     }
 }
-void MemoryAllocator::free(VkBuffer buffer)
+void MemoryAllocator::free(VkBuffer buffer, MemoryCategory::Buffer category_tag)
 {
     auto it = std::find_if(std::begin(buffer_allocations), std::end(buffer_allocations),
                            [&](auto const& elem) { return elem.first == buffer; });
