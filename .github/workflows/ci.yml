@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: cmake-install
         run: |
+          apt update && \
           apt-get install -y curl && \
           curl -sL https://cmake.org/files/v3.17/cmake-3.17.0-Linux-x86_64.sh -o cmakeinstall.sh && \
           chmod +x cmakeinstall.sh && \
