@@ -491,10 +491,10 @@ bool intersect_aabb
 
 bool global_bvh_intersect_ray(in Ray ray, float mint, float maxt, out Isect info)
 {
+	BVH[64] stack;
+	uint stack_ptr = 0;
 
-	/*
-	
-	*/
+	stack[stack_ptr++] = bvhs[0];
 
 	float closest_t = INF;
 	info.t = closest_t;
@@ -502,61 +502,57 @@ bool global_bvh_intersect_ray(in Ray ray, float mint, float maxt, out Isect info
 	info.normal = vec3(0);
 	Isect temp_isect;
 
-	bool intersect = false;
-
-	uint next_bvh_index = 0;
-
-
-	// Divergance for this code is going to be horrible, and this should not be looked at as model code
-	// If you have any suggestions / changes you want to contribute. Please do...
-
-	while (true)
+	while (stack_ptr != 0)
 	{
-		BVH current = bvhs[next_bvh_index];
-		if (current.times_visited >= 0)
-		{ // We're in a non-child node, and we need to traverse this
+		BVH current = stack[stack_ptr - 1];
+		current.visited++;
 
-			// We're at the top level one and we've come back to the start
-			if (current.times_visited >= 2)
+		bool intersected = intersect_bvh(ray, current);
+
+		if (current.visited < 0) // Checking if it's a child
+		{
+			for (uint i = current.triangle_index; i < current.triangle_index + current.triangle_count; i++)
 			{
-				if (current.parent + next_bvh_index == 0) break;
-				next_bvh_index = current.parent;
+				Triangle triangle = triangles[i];
+				bool isected = intersect_triangle_fast(ray,
+				triangle.vert0.xyz,
+				triangle.vert1.xyz,
+				triangle.vert2.xyz,
+				mint,
+				closest_t,
+				temp_isect);
+
+				if (temp_isect.t < closest_t)
+					info = temp_isect;
+				closest_t = min(temp_isect.t, closest_t);
 			}
 
-			if (intersect_aabb(
-				ray,
-				vec3(current.min_x, current.min_y, current.min_z),
-				vec3(current.max_x, current.max_y, current.max_z)))
-			{ // We hit this node, nice...
-				 next_bvh_index = current.times_visited == 0 ? current.left : current.right;
-			}
-			else
-			{ // We didn't hit, not nice... Let's go back up
-				next_bvh_index = current.parent;
-			}
+			do {
+				stack_ptr--;
+			} while (stack_ptr != 0 && stack[stack_ptr-1].visited > 0 && bvhs[stack[stack_ptr - 1].left].visited > 0);
+			if (stack_ptr == 0) break;
+			BVH parent = stack[--stack_ptr];
+			stack[stack_ptr++] = bvhs[parent.left];
+		}
+		else if (!intersected)
+		{
+			do {
+				stack_ptr--;
+			} while (stack_ptr != 0 && stack[stack_ptr-1].visited > 0 && bvhs[stack[stack_ptr - 1].left].visited > 0);
+			if (stack_ptr == 0) break;
+			BVH parent = stack[--stack_ptr];
+			stack[stack_ptr++] = bvhs[parent.left];
 		}
 		else
-		{ // We're in a child node, intersect it's primitives and such
-
-			if (intersect_aabb(
-			ray,
-			vec3(current.min_x, current.min_y, current.min_z),
-			vec3(current.max_x, current.max_y, current.max_z)
-			))
-			{
-				info.mat = convert_old_material(Material(vec4(0, 0, 0, 0), vec4(0, 0, 0, 0), vec4(1, 0, 0, 0)));
-				intersect = true;
-				break;
-			}
-			else
-			{
-				next_bvh_index = current.parent;
-			}
+		{
+			if (!(bvhs[current.right].visited > 0))
+			stack[stack_ptr++] = bvhs[current.right];
+			else if (!(bvhs[current.left].visited > 0))
+			stack[stack_ptr++] = bvhs[current.left];
 		}
-		current.times_visited = current.times_visited + 1;
 	}
 
-	return intersect;
+	return closest_t < maxt;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -654,6 +650,8 @@ bool intersect_scene
 
 	/* Intersect BVHs and get the primitives that are possibly intersected (Triangles Only) */
 
+	if (global_bvh_intersect_ray(ray, mint, closest_t, temp_isect))
+		info = temp_isect;
 
 	/* intersect triangles */
 
@@ -661,12 +659,12 @@ bool intersect_scene
 	for (int i = 0; i < triangles.length(); i++)
 	{
 		Triangle triangle = triangles[i];
-		intersect_triangle_fast(ray, 
-								triangle.vert0.xyz, 
-								triangle.vert1.xyz, 
-								triangle.vert2.xyz, 
-								mint, 
-								closest_t, 
+		intersect_triangle_fast(ray,
+								triangle.vert0.xyz,
+								triangle.vert1.xyz,
+								triangle.vert2.xyz,
+								mint,
+								closest_t,
 								temp_isect);
 		if (temp_isect.t<closest_t)
 		{
@@ -679,13 +677,8 @@ bool intersect_scene
 //	*/
 
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
-					
-	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
 
-	if (global_bvh_intersect_ray(ray, 0, 0, temp_isect))
-	{
-		info.mat = convert_old_material(Material(vec4(0, 0, 0, 0), vec4(0, 0, 0, 0), vec4(1, 0, 0, 0)));
-	}
+	info.pos = closest_t<INF? ray.origin + info.t * ray.direction : vec3(0);
 
 	return closest_t<INF;
 	
