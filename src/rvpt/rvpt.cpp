@@ -117,8 +117,6 @@ bool RVPT::initialize()
         gpu_bvh_node.max_y = node->bounds.max.y;
         gpu_bvh_node.max_z = node->bounds.max.z;
 
-        gpu_bvh_node.parent_index = parent_index;
-
         size_t gpu_node_index = gpu_bvh_nodes.size();
 
         if (node->is_leaf())
@@ -140,6 +138,7 @@ bool RVPT::initialize()
 
             gpu_bvh_node.right_index = gpu_bvh_nodes.size();
             add_gpu_bvh_node(node->right, gpu_node_index);
+            gpu_bvh_nodes[gpu_node_index] = gpu_bvh_node;
         }
     };
 

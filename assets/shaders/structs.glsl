@@ -23,10 +23,9 @@ struct BVH
     float max_z;
     uint left;
     uint right;
-    uint parent;
     uint triangle_index;
     uint triangle_count;
-    int times_visited;
+    int visited;
 };
 
 struct Ray
