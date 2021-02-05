@@ -46,7 +46,6 @@ struct GpuBvhNode
     float max_z;
     unsigned int left_index = std::numeric_limits<unsigned int>::max();
     unsigned int right_index = std::numeric_limits<unsigned int>::max();
-    unsigned int parent_index = std::numeric_limits<unsigned int>::max();
     unsigned int primitive_index = std::numeric_limits<unsigned int>::max();
     unsigned int primitive_count = std::numeric_limits<unsigned int>::max();
     int times_visited = 0;
