@@ -416,8 +416,8 @@ bool intersect_aabb
 	(Ray       ray,  	   /* ray for the intersection */
 	 vec3      aabb_min,   /* min vertex */
 	 vec3      aabb_max,   /* max vertex */
-     float     mint,       /* minimum distance along the ray */
-     float     maxt)       /* maximum distance along the ray */
+	 float     mint,       /* minimum distance along the ray */
+	 float     maxt)       /* maximum distance along the ray */
 
 /*
 	Returns true if there is an intersection with the AABB (min,max).
@@ -447,8 +447,8 @@ bool intersect_aabb
 	tmin = max(tmin, min(tz0, tz1));
 	tmax = min(tmax, max(tz0, tz1));
 
-    tmin = max(tmin, mint);
-    tmax = min(tmax, maxt);
+	tmin = max(tmin, mint);
+	tmax = min(tmax, maxt);
 
 	return tmax >= tmin;
 
@@ -466,42 +466,46 @@ bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 	info.pos = vec3(0);
 	info.normal = vec3(0);
 
-    stack[stack_ptr++] = 0;
-
-	while (stack_ptr > 0)
+	stack[stack_ptr++] = ~0;
+	uint stack_top = 0;
+	while (stack_top != ~0)
 	{
-		BvhNode node = bvh_nodes[stack[--stack_ptr]];
-        vec3 node_min = vec3(node.bounds[0], node.bounds[2], node.bounds[4]);
-        vec3 node_max = vec3(node.bounds[1], node.bounds[3], node.bounds[5]);
-		if (!intersect_aabb(ray, node_min, node_max, mint, closest_t))
-            continue;
+		BvhNode node = bvh_nodes[stack_top];
+		vec3 node_min = vec3(node.bounds[0], node.bounds[2], node.bounds[4]);
+		vec3 node_max = vec3(node.bounds[1], node.bounds[3], node.bounds[5]);
+		if (!intersect_aabb(ray, node_min, node_max, mint, closest_t)) {
+			stack_top = stack[--stack_ptr];
+			continue;
+		}
 
-        uint first_child_or_primitive = node.first_child_or_primitive;
-        if (node.primitive_count > 0)
-        {
-            // This is a leaf
+		uint first_child_or_primitive = node.first_child_or_primitive;
+		if (node.primitive_count > 0)
+		{
+			// This is a leaf
 			for (uint i = first_child_or_primitive, n = i + node.primitive_count; i < n; ++i)
 			{
-                Isect temp_isect;
+				Isect temp_isect;
 				Triangle triangle = triangles[i];
 				bool isected = intersect_triangle_fast(ray,
-                    triangle.vert0.xyz,
-                    triangle.vert1.xyz,
-                    triangle.vert2.xyz,
-                    mint,
-                    closest_t,
-                    temp_isect);
+					triangle.vert0.xyz,
+					triangle.vert1.xyz,
+					triangle.vert2.xyz,
+					mint,
+					closest_t,
+					temp_isect);
 				if (temp_isect.t < closest_t)
 					info = temp_isect;
 				closest_t = min(temp_isect.t, closest_t);
 			}
-        }
-        else
-        {
-            // This is an internal node
-			stack[stack_ptr++] = first_child_or_primitive;
+			stack_top = stack[--stack_ptr];
+		}
+		else
+		{
+			// This is an internal node: Push its children on the stack.
+			// TODO: Order the children on the stack
 			stack[stack_ptr++] = first_child_or_primitive + 1;
-        }
+			stack_top = first_child_or_primitive;
+		}
 	}
 
 	return closest_t < maxt;
