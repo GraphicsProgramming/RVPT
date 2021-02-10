@@ -459,10 +459,10 @@ bool intersect_aabb
 bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 {
 	uint[64] stack;
-	uint stack_ptr = 0;
+	int stack_ptr = 0;
 
 	float closest_t = maxt;
-	info.t = closest_t;
+	info.t = INF;
 	info.pos = vec3(0);
 	info.normal = vec3(0);
 
@@ -484,18 +484,15 @@ bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 			// This is a leaf
 			for (uint i = first_child_or_primitive, n = i + node.primitive_count; i < n; ++i)
 			{
-				Isect temp_isect;
 				Triangle triangle = triangles[i];
-				bool isected = intersect_triangle_fast(ray,
-					triangle.vert0.xyz,
-					triangle.vert1.xyz,
-					triangle.vert2.xyz,
-					mint,
-					closest_t,
-					temp_isect);
-				if (temp_isect.t < closest_t)
+				vec3 v0 = triangle.vert0.xyz;
+				vec3 v1 = triangle.vert1.xyz;
+				vec3 v2 = triangle.vert2.xyz;
+				Isect temp_isect;
+				if (intersect_triangle_fast(ray, v0, v1, v2, mint, closest_t, temp_isect)) {
 					info = temp_isect;
-				closest_t = min(temp_isect.t, closest_t);
+					closest_t = temp_isect.t;
+				}
 			}
 			stack_top = stack[--stack_ptr];
 		}
