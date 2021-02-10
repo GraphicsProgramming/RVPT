@@ -603,7 +603,10 @@ bool intersect_scene
 	/* Intersect BVHs and get the primitives that are possibly intersected (Triangles Only) */
 
 	if (intersect_bvh(ray, mint, closest_t, temp_isect))
+	{
+		closest_t = temp_isect.t;
 		info = temp_isect;
+	}
 
 	/* intersect triangles */
 
