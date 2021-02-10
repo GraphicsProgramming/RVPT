@@ -13,19 +13,11 @@ struct Triangle
     vec4 mat_id;
 };
 
-struct BVH
+struct BvhNode
 {
-    float min_x;
-    float min_y;
-    float min_z;
-    float max_x;
-    float max_y;
-    float max_z;
-    uint left;
-    uint right;
-    uint triangle_index;
-    uint triangle_count;
-    int visited;
+    uint first_child_or_primitive;
+    uint primitive_count;
+    float[6] bounds;
 };
 
 struct Ray

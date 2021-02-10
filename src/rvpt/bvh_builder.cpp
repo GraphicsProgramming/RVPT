@@ -4,124 +4,187 @@
 
 #include "bvh_builder.h"
 
-BvhBuilder::BvhBuilder(BvhType type) : bvh_build_type(type) {}
+#include <numeric>
+#include <algorithm>
+#include <cassert>
 
-BvhNode* BvhBuilder::build_global_bvh(std::vector<AABB> &bounding_boxes_no_depth, std::vector<std::vector<AABB>>& bounding_boxes_with_depth,
-                                                  const std::vector<Triangle> &triangle_primitives)
+Bvh BinnedBvhBuilder::build_bvh(
+    const std::vector<glm::vec3>& primitive_centers,
+    const std::vector<AABB>& bounding_boxes)
 {
-    BvhNode* ret;
-    switch (bvh_build_type)
+    assert(primitive_centers.size() == bounding_boxes.size());
+    size_t primitive_count = primitive_centers.size();
+    assert(primitive_count != 0);
+
+    // Allocate enough nodes in a big, flat array. For this, we use the property:
+    //
+    //   number of nodes = 2 * number of leaves - 1
+    //
+    // This property is valid for every binary tree and easy to verify by induction.
+    // Since a BVH has at most as many leaves as there are primitives (one primitive
+    // only goes into one leaf), then we have an upper bound on the number of nodes.
+    Bvh bvh;
+    bvh.nodes.reserve(2 * primitive_count - 1);
+
+    // Primitive indices are just a big array of indices into the primitive data.
+    // Initially, that array is just 0, 1, 2, ...
+    bvh.primitive_indices.resize(primitive_count);
+    std::iota(bvh.primitive_indices.begin(), bvh.primitive_indices.end(), 0);
+
+    // Initially, we set the root node to be a leaf that spans the entire list of primitives
+    bvh.nodes.emplace_back(BvhNode {
+        .first_child_or_primitive = 0,
+        .primitive_count = static_cast<uint32_t>(primitive_count)
+    });
+    build_bvh_node(bvh, bvh.nodes.front(), primitive_centers, bounding_boxes);
+    bvh.nodes.shrink_to_fit();
+    return bvh;
+}
+
+size_t BinnedBvhBuilder::compute_bin_index(
+    int axis, const glm::vec3& center, const AABB& aabb)
+{
+    int index = (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]);
+    return std::min(int { bin_count - 1 }, std::max(0, index));
+}
+
+std::tuple<float, int, size_t> BinnedBvhBuilder::find_best_split(
+    size_t begin, size_t end,
+    const AABB& node_aabb,
+    const std::vector<uint32_t>& primitive_indices,
+    const std::vector<glm::vec3>& primitive_centers,
+    const std::vector<AABB>& bounding_boxes)
+{
+    float min_cost = std::numeric_limits<float>::max();
+    size_t min_bin = 0;
+    int min_axis = -1;
+    for (int axis = 0; axis < 3; ++axis)
     {
-            /*
-             * Todo: Add more Bvh Build types?
-             */
-        case BottomTop:
+        Bin bins[bin_count];
 
-            /*
-             * Bottom -> Top BVH
-             */
+        // Fill bins with primitives
+        for (size_t i = begin; i < end; ++i)
+        {
+            const glm::vec3& primitive_center = primitive_centers[primitive_indices[i]];
+            Bin& bin = bins[compute_bin_index(axis, primitive_center, node_aabb)];
+            bin.primitive_count++;
+            bin.aabb.expand(bounding_boxes[primitive_indices[i]]);
+        }
 
-            std::vector<AABB> base_bounding_boxes;
-            base_bounding_boxes.resize(triangle_primitives.size());
-            for (size_t i = 0; i < triangle_primitives.size(); i++)
+        // Sweep from the left to the right in order to compute the partial cost:
+        //
+        //    N(Li) * SA(Li)
+        //
+        // where N(x) is the number of primitives in node x, and SA(x) is its surface
+        // area. Li refers to the left node if we split at the bin index with index i.
+        AABB left_aabb;
+        size_t left_count = 0;
+        for (size_t i = 0; i < bin_count; ++i)
+        {
+            left_aabb.expand(bins[i].aabb);
+            left_count += bins[i].primitive_count;
+            bins[i].cost = left_aabb.half_area() * left_count;
+        }
+
+        // Sweep from the right to the left in order to compute the full SAH cost:
+        //
+        // N(Ri) * SA(Ri) + N(Li) * SA(Li)
+        //
+        // Note that N(Li) * SA(Li) has already been computed in the step above.
+        // By convention, we use the index of the first bin on the right to denote a split.
+        // This means that we only need to go through bins with index 1..bin_count - 1 (0 is
+        // not a valid split since there would be nothing in the left child).
+        AABB right_aabb;
+        size_t right_count = 0;
+        for (size_t i = bin_count - 1; i > 0; --i)
+        {
+            right_aabb.expand(bins[i].aabb);
+            right_count += bins[i].primitive_count;
+            float cost = right_aabb.half_area() * right_count + bins[i - 1].cost;
+            if (cost < min_cost)
             {
-                const Triangle &triangle = triangle_primitives[i];
-                base_bounding_boxes[i] =
-                    AABB(fminf(fminf(triangle.vertex0.x, triangle.vertex1.x), triangle.vertex2.x),
-                         fminf(fminf(triangle.vertex0.y, triangle.vertex1.y), triangle.vertex2.y),
-                         fminf(fminf(triangle.vertex0.z, triangle.vertex1.z), triangle.vertex2.z),
-                         fmaxf(fmaxf(triangle.vertex0.x, triangle.vertex1.x), triangle.vertex2.x),
-                         fmaxf(fmaxf(triangle.vertex0.y, triangle.vertex1.y), triangle.vertex2.y),
-                         fmaxf(fmaxf(triangle.vertex0.z, triangle.vertex1.z), triangle.vertex2.z));
+                min_cost = cost;
+                min_axis = axis;
+                min_bin = i;
             }
-            bounding_boxes_with_depth.push_back(base_bounding_boxes);
-
-            std::vector<BvhNode*> current_nodes;
-            std::vector<BvhNode*> next_nodes;
-            current_nodes.resize(base_bounding_boxes.size());
-            for (size_t i = 0; i < base_bounding_boxes.size(); i++)
-            {
-                current_nodes[i] = new BvhNode();
-                current_nodes[i]->bounds = base_bounding_boxes[i];
-                current_nodes[i]->triangles.push_back(triangle_primitives[i]);
-            }
-
-            while (current_nodes.size() > 1)
-            {
-                // Get the previous power of 2
-                size_t currently_hittable = 1;
-                while (currently_hittable < current_nodes.size())
-                    currently_hittable <<= 1;
-                currently_hittable /= 2;
-
-                if (currently_hittable == 1) break;
-
-                std::vector<AABB> layer_bounds;
-                for (size_t i = 0; i < current_nodes.size(); i++)
-                {
-                    // This is meant as a check to see if we can use this in the current bvh depth
-                    if (i < currently_hittable)
-                    {
-                        size_t next_node_index = i;
-                        if (i % 2 != 0) next_node_index--;
-                        next_node_index /= 2;
-                        if (next_nodes.size() < next_node_index + 1) next_nodes.push_back(new BvhNode());
-                        if (i % 2 == 0)
-                        {
-                            next_nodes[next_node_index]->left = current_nodes[i];
-                            next_nodes[next_node_index]->bounds.expand(
-                                next_nodes[next_node_index]->left->bounds.min);
-                            next_nodes[next_node_index]->bounds.expand(
-                                next_nodes[next_node_index]->left->bounds.max);
-                        }
-                        else
-                        {
-                            // In this case, we can assume the past one exists and we want to get the BvH node
-                            // That is the closest.
-
-                            // Find the closest node in world space, and swap it with our current node
-                            size_t closest_node_index = -1;
-                            float closest_node_distance_sq = std::numeric_limits<float>::infinity();
-                            glm::vec3 left_node_center = next_nodes[next_node_index]->left->bounds.center();
-                            for (int a = i; a < current_nodes.size(); a++)
-                            {
-                                glm::vec3 node_center = current_nodes[a]->bounds.center();
-                                float dx = fabsf(left_node_center.x - node_center.x);
-                                float dy = fabsf(left_node_center.y - node_center.y);
-                                float dz = fabsf(left_node_center.z - node_center.z);
-                                float distance_to_node_sq = dx * dx + dy * dy + dz * dz;
-                                if (distance_to_node_sq < closest_node_distance_sq)
-                                {
-                                    closest_node_index = a;
-                                    closest_node_distance_sq = distance_to_node_sq;
-                                }
-                            }
-                            std::swap(current_nodes[i], current_nodes[closest_node_index]);
-
-                            next_nodes[next_node_index]->right = current_nodes[i];
-                            next_nodes[next_node_index]->bounds.expand(
-                                next_nodes[next_node_index]->right->bounds.min);
-                            next_nodes[next_node_index]->bounds.expand(
-                                next_nodes[next_node_index]->right->bounds.max);
-                            layer_bounds.push_back(next_nodes[next_node_index]->bounds);
-                        }
-                    }
-                    else // In the case it isn't, just pass it directly to the higher level of the tree
-                    {
-                        next_nodes.push_back(current_nodes[i]);
-                    }
-                }
-
-                bounding_boxes_with_depth.insert(bounding_boxes_with_depth.begin(), layer_bounds);
-                layer_bounds.clear();
-                current_nodes = next_nodes;
-                next_nodes.clear();
-            }
-
-            ret = current_nodes[0];
-
-            break;
+        }
     }
 
-    return ret;
+    assert(min_axis != -1);
+    return std::make_tuple(min_cost, min_axis, min_bin);
+}
+
+void BinnedBvhBuilder::build_bvh_node(
+    Bvh& bvh, BvhNode& node_to_build,
+    const std::vector<glm::vec3>& primitive_centers,
+    const std::vector<AABB>& bounding_boxes)
+{
+    assert(node_to_build.is_leaf());
+    const size_t primitives_begin = node_to_build.first_child_or_primitive;
+    const size_t primitives_end = primitives_begin + node_to_build.primitive_count;
+
+    // Compute the bounding box of this node
+    node_to_build.aabb() = AABB();
+    for (size_t i = primitives_begin; i < primitives_end; ++i)
+        node_to_build.aabb().expand(bounding_boxes[bvh.primitive_indices[i]]);
+
+    // If the node has too few primitives, keep it a leaf
+    if (node_to_build.primitive_count < min_primitives_per_leaf)
+        return;
+
+    auto [min_cost, min_axis, min_bin] = find_best_split(
+        primitives_begin, primitives_end,
+        node_to_build.aabb(),
+        bvh.primitive_indices,
+        primitive_centers,
+        bounding_boxes);
+
+    float no_split_cost = node_to_build.aabb().half_area() * node_to_build.primitive_count;
+    size_t right_partition_begin = 0;
+    if (min_cost >= no_split_cost)
+    {
+        // If the split returned by binning is not better than not splitting, we have 2 possibilities:
+        // - The number of primitives is low, so having a leaf here is fine,
+        // - The number of primitives is too high and we need a fallback strategy.
+        if (node_to_build.primitive_count <= max_primitives_per_leaf)
+            return;
+
+        // The fallback strategy here is just to sort primitives along the split axis and pick the median.
+        // This ensures that, even if this split is not useful, we have a chance of making good splits in
+        // the two children.
+        std::sort(
+            bvh.primitive_indices.begin() + primitives_begin,
+            bvh.primitive_indices.begin() + primitives_end,
+            [&] (size_t i, size_t j)
+            {
+                return primitive_centers[i][min_axis] < primitive_centers[j][min_axis];
+            });
+        right_partition_begin = primitives_begin + node_to_build.primitive_count / 2;
+    } else {
+        // This split is good, we just need to partition the primitives accordingly
+        right_partition_begin = std::partition(
+            bvh.primitive_indices.begin() + primitives_begin,
+            bvh.primitive_indices.begin() + primitives_end,
+            [&] (size_t i)
+            {
+                size_t bin_index = compute_bin_index(min_axis, primitive_centers[i], node_to_build.aabb());
+                return bin_index < min_bin;
+            }) - bvh.primitive_indices.begin();
+    }
+    assert(right_partition_begin > primitives_begin && right_partition_begin < primitives_end);
+
+    // Allocate children nodes and recurse
+    size_t first_child_index = bvh.nodes.size();
+    auto& left_child = bvh.nodes.emplace_back();
+    auto& right_child = bvh.nodes.emplace_back();
+    node_to_build.primitive_count = 0;
+    node_to_build.first_child_or_primitive = first_child_index;
+
+    left_child.primitive_count  = right_partition_begin - primitives_begin;
+    left_child.first_child_or_primitive = primitives_begin;
+    right_child.primitive_count = primitives_end - right_partition_begin;
+    right_child.first_child_or_primitive = right_partition_begin;
+
+    build_bvh_node(bvh, left_child,  primitive_centers, bounding_boxes);
+    build_bvh_node(bvh, right_child, primitive_centers, bounding_boxes);
 }

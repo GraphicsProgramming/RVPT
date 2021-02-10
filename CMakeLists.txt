@@ -12,11 +12,11 @@ set(source_files
         src/rvpt/window.cpp
         src/rvpt/vk_util.cpp
         src/rvpt/imgui_impl.cpp
-        ##	assets/shaders/fullscreen_tri.vert
-        ##	assets/shaders/tex_sample.frag
+        ##assets/shaders/fullscreen_tri.vert
+        ##assets/shaders/tex_sample.frag
         src/rvpt/camera.cpp
         src/rvpt/timer.cpp
-        src/rvpt/bvh_node.cpp
+        src/rvpt/bvh.cpp
         src/rvpt/bvh_builder.cpp)
 
 set(header_files
@@ -27,7 +27,7 @@ set(header_files
         src/rvpt/camera.h
         src/rvpt/timer.h
         src/rvpt/geometry.h
-		src/rvpt/bvh_node.h
+        src/rvpt/bvh.h
         src/rvpt/bvh_builder.h
         )
 
