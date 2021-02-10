@@ -39,7 +39,7 @@ struct Material_new
 	int  type; /* 0: diffuse, 1: perfect mirror */
 	vec3 base_color;
 	vec3 emissive;
-    float ior;
+	float ior;
 };
 
 Material_new convert_old_material
@@ -584,14 +584,13 @@ bool intersect_scene
 		temp_ray.origin = (ray.origin - sphere.origin) / sphere.radius;
 		temp_ray.direction = ray.direction / sphere.radius;
 		
-        /*
-            g(x) = 0, x \in S
-            M(x) \in M(S) -> g(M^{-1}(x)) = 0 -> x \in S
-            
-        */
-        
+		/*
+		 g(x) = 0, x \in S
+		 M(x) \in M(S) -> g(M^{-1}(x)) = 0 -> x \in S
+		*/
+
 		//intersect_sphere(temp_ray, mint, closest_t, temp_isect);
-        intersect_sphere(temp_ray, mint, closest_t, temp_isect);
+		intersect_sphere(temp_ray, mint, closest_t, temp_isect);
 		if (temp_isect.t<closest_t)
 		{
 			info = temp_isect;
