@@ -411,49 +411,13 @@ bool intersect_triangle_fast
 
 /*--------------------------------------------------------------------------*/
 
-bool intersect_bvh
-
-	(Ray       ray, /* ray for the intersection */
-	 BVH       bvh)	/* bvh to test intersection against */
-
-/*
-	Returns true if there is an intersection with the passed in BVH's AABB.
-
-	For the derivation see the appendix. (Todo)
-*/
-{
-	/* Inverse transform on the ray */
-	vec3 inv_ray_dir = vec3(1 / ray.direction.x, 1 / ray.direction.y, 1 / ray.direction.z);
-
-	double tx0 = (bvh.min_x - ray.origin.x) * inv_ray_dir.x;
-	double tx1 = (bvh.max_x - ray.origin.x) * inv_ray_dir.x;
-
-	double tmin = min(tx0, tx1);
-	double tmax = max(tx0, tx1);
-
-	double ty0 = (bvh.min_y - ray.origin.y) * inv_ray_dir.y;
-	double ty1 = (bvh.max_y - ray.origin.y) * inv_ray_dir.y;
-
-	tmin = max(tmin, min(ty0, ty1));
-	tmax = min(tmax, max(ty0, ty1));
-
-	double tz0 = (bvh.min_z - ray.origin.z) * inv_ray_dir.z;
-	double tz1 = (bvh.max_z - ray.origin.z) * inv_ray_dir.z;
-
-	tmin = max(tmin, min(tz0, tz1));
-	tmax = min(tmax, max(tz0, tz1));
-
-	return tmax >= tmin && tmax > 0;
-
-} /* intersect_bvh */
-
-/*--------------------------------------------------------------------------*/
-
 bool intersect_aabb
 
 	(Ray       ray,  	   /* ray for the intersection */
 	 vec3      aabb_min,   /* min vertex */
-	 vec3      aabb_max)   /* max vertex */
+	 vec3      aabb_max,   /* max vertex */
+     float     mint,       /* minimum distance along the ray */
+     float     maxt)       /* maximum distance along the ray */
 
 /*
 	Returns true if there is an intersection with the AABB (min,max).
@@ -483,73 +447,61 @@ bool intersect_aabb
 	tmin = max(tmin, min(tz0, tz1));
 	tmax = min(tmax, max(tz0, tz1));
 
-	return tmax >= tmin && tmax > 0;
+    tmin = max(tmin, mint);
+    tmax = min(tmax, maxt);
+
+	return tmax >= tmin;
 
 } /* intersect_aabb */
 
 /*--------------------------------------------------------------------------*/
 
-bool global_bvh_intersect_ray(in Ray ray, float mint, float maxt, out Isect info)
+bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 {
-	BVH[64] stack;
+	uint[64] stack;
 	uint stack_ptr = 0;
 
-	stack[stack_ptr++] = bvhs[0];
-
-	float closest_t = INF;
+	float closest_t = maxt;
 	info.t = closest_t;
 	info.pos = vec3(0);
 	info.normal = vec3(0);
-	Isect temp_isect;
 
-	while (stack_ptr != 0)
+    stack[stack_ptr++] = 0;
+
+	while (stack_ptr > 0)
 	{
-		BVH current = stack[stack_ptr - 1];
-		current.visited++;
+		BvhNode node = bvh_nodes[stack[--stack_ptr]];
+        vec3 node_min = vec3(node.bounds[0], node.bounds[2], node.bounds[4]);
+        vec3 node_max = vec3(node.bounds[1], node.bounds[3], node.bounds[5]);
+		if (!intersect_aabb(ray, node_min, node_max, mint, closest_t))
+            continue;
 
-		bool intersected = intersect_bvh(ray, current);
-
-		if (current.visited < 0) // Checking if it's a child
-		{
-			for (uint i = current.triangle_index; i < current.triangle_index + current.triangle_count; i++)
+        uint first_child_or_primitive = node.first_child_or_primitive;
+        if (node.primitive_count > 0)
+        {
+            // This is a leaf
+			for (uint i = first_child_or_primitive, n = i + node.primitive_count; i < n; ++i)
 			{
+                Isect temp_isect;
 				Triangle triangle = triangles[i];
 				bool isected = intersect_triangle_fast(ray,
-				triangle.vert0.xyz,
-				triangle.vert1.xyz,
-				triangle.vert2.xyz,
-				mint,
-				closest_t,
-				temp_isect);
-
+                    triangle.vert0.xyz,
+                    triangle.vert1.xyz,
+                    triangle.vert2.xyz,
+                    mint,
+                    closest_t,
+                    temp_isect);
 				if (temp_isect.t < closest_t)
 					info = temp_isect;
 				closest_t = min(temp_isect.t, closest_t);
 			}
-
-			do {
-				stack_ptr--;
-			} while (stack_ptr != 0 && stack[stack_ptr-1].visited > 0 && bvhs[stack[stack_ptr - 1].left].visited > 0);
-			if (stack_ptr == 0) break;
-			BVH parent = stack[--stack_ptr];
-			stack[stack_ptr++] = bvhs[parent.left];
-		}
-		else if (!intersected)
-		{
-			do {
-				stack_ptr--;
-			} while (stack_ptr != 0 && stack[stack_ptr-1].visited > 0 && bvhs[stack[stack_ptr - 1].left].visited > 0);
-			if (stack_ptr == 0) break;
-			BVH parent = stack[--stack_ptr];
-			stack[stack_ptr++] = bvhs[parent.left];
-		}
-		else
-		{
-			if (!(bvhs[current.right].visited > 0))
-			stack[stack_ptr++] = bvhs[current.right];
-			else if (!(bvhs[current.left].visited > 0))
-			stack[stack_ptr++] = bvhs[current.left];
-		}
+        }
+        else
+        {
+            // This is an internal node
+			stack[stack_ptr++] = first_child_or_primitive;
+			stack[stack_ptr++] = first_child_or_primitive + 1;
+        }
 	}
 
 	return closest_t < maxt;
@@ -650,7 +602,7 @@ bool intersect_scene
 
 	/* Intersect BVHs and get the primitives that are possibly intersected (Triangles Only) */
 
-	if (global_bvh_intersect_ray(ray, mint, closest_t, temp_isect))
+	if (intersect_bvh(ray, mint, closest_t, temp_isect))
 		info = temp_isect;
 
 	/* intersect triangles */

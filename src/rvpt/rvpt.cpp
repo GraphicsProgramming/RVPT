@@ -31,8 +31,7 @@ RVPT::RVPT(Window& window)
     : window_ref(window),
       scene_camera(window.get_aspect_ratio()),
       random_generator(std::random_device{}()),
-      distribution(0.0f, 1.0f),
-      bvh_builder(BvhBuilder::BvhType::BottomTop)
+      distribution(0.0f, 1.0f)
 {
     ImGui::CreateContext();
 
@@ -77,72 +76,9 @@ bool RVPT::initialize()
     create_framebuffers();
 
     // Bvh Stuff
-    std::vector<AABB> non_depth_bvh_bounds;
-    tl_bvh = bvh_builder.build_global_bvh(non_depth_bvh_bounds, depth_bvh_bounds, triangles);
-
-    // Rework the BVH nodes depending on if they want to add support for depth rendering or not
-    // honestly everyone should use it, even if it's not the easiest thing to add. Just because it
-    // looks cool. But hey if you want to be lazy go for it.
-    if (depth_bvh_bounds.empty() && !non_depth_bvh_bounds.empty())
-    {
-        depth_bvh_bounds[0] = non_depth_bvh_bounds;
-        does_bvh_support_depth_viewing = false;
-        max_bvh_build_depth = 1;
-    }
-    else
-    {
-        max_bvh_build_depth = depth_bvh_bounds.size();
-        does_bvh_support_depth_viewing = true;
-    }
-
-    // Setting up the device side Bvh nodes
-
-    // Resize the GPU bvh node list
-    gpu_bvh_nodes.reserve([&]() {
-        // Using a lambda because I don't know, I really just wanted to
-        size_t total_nodes = 0;
-        for (const auto& depth_list : depth_bvh_bounds) total_nodes += depth_list.size();
-
-        return total_nodes;
-    }());
-
-    auto add_gpu_bvh_node = std::function<void(BvhNode*, size_t)>();
-    add_gpu_bvh_node = [&](BvhNode* node, size_t parent_index) {
-        GpuBvhNode gpu_bvh_node;
-
-        gpu_bvh_node.min_x = node->bounds.min.x;
-        gpu_bvh_node.min_y = node->bounds.min.y;
-        gpu_bvh_node.min_z = node->bounds.min.z;
-        gpu_bvh_node.max_x = node->bounds.max.x;
-        gpu_bvh_node.max_y = node->bounds.max.y;
-        gpu_bvh_node.max_z = node->bounds.max.z;
-
-        size_t gpu_node_index = gpu_bvh_nodes.size();
-
-        if (node->is_leaf())
-        {
-            gpu_bvh_node.primitive_index = sorted_triangles.size();
-            gpu_bvh_node.primitive_count = node->triangles.size();
-            gpu_bvh_node.times_visited = -10000;
-
-            gpu_bvh_nodes.push_back(gpu_bvh_node);
-
-            sorted_triangles.reserve(sorted_triangles.size() + node->triangles.size());
-            for (const auto& triangle : node->triangles) sorted_triangles.push_back(triangle);
-        }
-        else
-        {
-            gpu_bvh_nodes.push_back(gpu_bvh_node);
-            gpu_bvh_node.left_index = gpu_bvh_nodes.size();
-            add_gpu_bvh_node(node->left, gpu_node_index);
-
-            gpu_bvh_node.right_index = gpu_bvh_nodes.size();
-            add_gpu_bvh_node(node->right, gpu_node_index);
-            gpu_bvh_nodes[gpu_node_index] = gpu_bvh_node;
-        }
-    };
-
-    add_gpu_bvh_node(tl_bvh, 0);
+    top_level_bvh = bvh_builder.build_bvh(triangles);
+    depth_bvh_bounds = top_level_bvh.collect_aabbs_by_depth();
+    sorted_triangles = top_level_bvh.permute_primitives(triangles);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -151,6 +87,7 @@ bool RVPT::initialize()
 
     return init;
 }
+
 bool RVPT::update()
 {
     auto camera_data = scene_camera.get_data();
@@ -179,7 +116,7 @@ bool RVPT::update()
 
     float delta = static_cast<float>(time.since_last_frame());
 
-    per_frame_data[current_frame_index].bvh_buffer.copy_to(gpu_bvh_nodes);
+    per_frame_data[current_frame_index].bvh_buffer.copy_to(top_level_bvh.nodes);
     per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
     per_frame_data[current_frame_index].triangle_buffer.copy_to(sorted_triangles);
     per_frame_data[current_frame_index].material_buffer.copy_to(materials);
@@ -215,7 +152,7 @@ bool RVPT::update()
 
         for (int i = view_previous_depths ? 0 : max_bvh_view_depth - 1; i < max_bvh_view_depth; i++)
         {
-            const std::vector<AABB> bounding_boxes = depth_bvh_bounds[i];
+            const std::vector<AABB>& bounding_boxes = depth_bvh_bounds[i];
 
             const glm::vec3 colour = {1, 1, 1};
             const glm::vec3 normal = {0, 0, 0};
@@ -339,12 +276,9 @@ void RVPT::update_imgui()
         if (ImGui::Button("Wireframe")) toggle_wireframe_debug();
 
         if (ImGui::Button("BVH Debug")) toggle_bvh_debug();
-        if (does_bvh_support_depth_viewing)
-        {
-            ImGui::SliderInt("Depth", &max_bvh_view_depth, 1, max_bvh_build_depth);
-            ImGui::SameLine();
-            if (ImGui::Button("View Last Depths")) toggle_view_last_bvh_depths();
-        }
+        ImGui::SliderInt("Depth", &max_bvh_view_depth, 1, depth_bvh_bounds.size());
+        ImGui::SameLine();
+        if (ImGui::Button("View Last Depths")) toggle_view_last_bvh_depths();
 
         static bool horizontal_split = false;
         static bool vertical_split = false;
@@ -872,7 +806,7 @@ void RVPT::add_per_frame_data(int index)
                    VK::MemoryUsage::cpu_to_gpu);
     auto bvh_buffer =
         VK::Buffer(vk_device, memory_allocator, "bvh_buffer_" + std::to_string(index),
-                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(GpuBvhNode) * gpu_bvh_nodes.size(),
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(BvhNode) * top_level_bvh.nodes.size(),
                    VK::MemoryUsage::cpu_to_gpu);
     auto sphere_buffer =
         VK::Buffer(vk_device, memory_allocator, "spheres_buffer_" + std::to_string(index),
