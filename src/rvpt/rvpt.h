@@ -19,7 +19,7 @@
 #include "timer.h"
 #include "geometry.h"
 #include "material.h"
-#include "bvh_node.h"
+#include "bvh.h"
 #include "bvh_builder.h"
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -112,22 +112,15 @@ private:
     std::vector<float> random_numbers;
 
     // BVH AABB's
-    BvhBuilder bvh_builder;
-    BvhNode* tl_bvh; // Highest level BVH
+    BinnedBvhBuilder bvh_builder;
+    Bvh top_level_bvh;
+
+    // Debug BVH view
     std::vector<std::vector<AABB>> depth_bvh_bounds;
     size_t bvh_vertex_count = 0;
-    int max_bvh_build_depth = 5;
-    int max_bvh_view_depth = 2;
+    int max_bvh_view_depth = 1;
     bool view_previous_depths = true;
-    bool does_bvh_support_depth_viewing = false;
-    // Yes I know, I have an extra set of the AABB's, I did this so instead of recursively going
-    // through every. single. node. To setup the vertices for the debug view, we only have to do go
-    // through them once which means the split function actually takes a pointer to this, and
-    // uploads it's own AABB to the vector every time it gets "split" If you have a better solution
-    // for this be my guest. Make a pull request and tell me how, because I can't think of a better
-    // solution At least not a better one that I would be able to write in an okay amount of time.
 
-    std::vector<GpuBvhNode> gpu_bvh_nodes;
     std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
     std::vector<Triangle> sorted_triangles;
