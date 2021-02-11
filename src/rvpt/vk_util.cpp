@@ -759,6 +759,7 @@ VkPipeline PipelineBuilder::create_immutable_pipeline(GraphicsPipelineDetails co
     create_info.pMultisampleState = &multisampling;
     create_info.pDepthStencilState = &depth_stencil_info;
     create_info.pColorBlendState = &color_blending;
+    create_info.pDynamicState = &dynamic_state;
     create_info.layout = details.pipeline_layout;
     create_info.renderPass = details.render_pass;
     create_info.subpass = 0;
