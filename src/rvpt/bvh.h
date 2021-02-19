@@ -21,19 +21,19 @@ struct BvhNode
     struct AABBProxy {
         BvhNode& node;
 
-        AABBProxy(BvhNode& node)
+        explicit AABBProxy(BvhNode& node)
             : node(node)
         {}
 
         [[nodiscard]]
-        AABB aabb() const
+        AABB aabb() const noexcept
         {
             return AABB(
                 glm::vec3(node.bounds[0], node.bounds[2], node.bounds[4]),
                 glm::vec3(node.bounds[1], node.bounds[3], node.bounds[5]));
         }
 
-        operator AABB () const { return aabb(); }
+        operator AABB () const noexcept { return aabb(); }
 
         AABBProxy& operator = (const AABB& aabb)
         {
@@ -48,13 +48,13 @@ struct BvhNode
 
         AABBProxy& expand(const AABB& aabb) { return *this = this->aabb().expand(aabb); }
         AABBProxy& expand(const glm::vec3& vec) { return *this = aabb().expand(vec); }
-        float half_area() const { return aabb().half_area(); }
+        [[nodiscard]] float half_area() const { return aabb().half_area(); }
     };
 
-    AABBProxy aabb() { return AABBProxy(*this); }
-    AABB aabb() const { return AABBProxy(const_cast<BvhNode&>(*this)); }
+    AABB aabb() { return AABBProxy(*this); }
+    [[nodiscard]] AABB aabb() const { return AABBProxy(const_cast<BvhNode&>(*this)); }
 
-    bool is_leaf() const { return primitive_count != 0; }
+    [[nodiscard]] bool is_leaf() const { return primitive_count != 0; }
 };
 
 struct Bvh {
@@ -62,7 +62,7 @@ struct Bvh {
     std::vector<BvhNode> nodes;
     std::vector<uint32_t> primitive_indices;
 
-    std::vector<std::vector<AABB>> collect_aabbs_by_depth() const
+    [[nodiscard]] std::vector<std::vector<AABB>> collect_aabbs_by_depth() const
     {
         std::vector<std::vector<AABB>> aabbs;
         collect_aabbs_by_depth(aabbs, 0, 0);

@@ -10,7 +10,7 @@
 Window::Window(Window::Settings settings) : active_settings(settings)
 {
     // Initializing glfw and a window
-    auto glfw_ret = glfwInit();
+    const auto glfw_ret = glfwInit();
     if (!glfw_ret) fmt::print(stderr, "Failed to initialize glfw\n");
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -30,7 +30,8 @@ Window::Window(Window::Settings settings) : active_settings(settings)
     }
 
     double x = 0.0, y = 0.0;
-    glfwGetCursorPos(window_ptr, &x, &y);
+    // Set the position to 0, 0 to avoid that weird but where the camera spawns upside down
+    glfwSetCursorPos(window_ptr, 0, 0);
     mouse_position_x = mouse_position_previous_x = x;
     mouse_position_y = mouse_position_previous_y = y;
 }
@@ -85,7 +86,7 @@ void Window::setup_imgui()
         io.DisplayFramebufferScale = ImVec2((float)display_w / w, (float)display_h / h);
 }
 
-float Window::get_aspect_ratio()
+float Window::get_aspect_ratio() const noexcept
 {
     return static_cast<float>(active_settings.width) / static_cast<float>(active_settings.height);
 }
@@ -119,17 +120,17 @@ void Window::add_scroll_callback(Window::MouseScrollCallback callback)
     scroll_callbacks.push_back(callback);
 }
 
-bool Window::is_key_down(Window::KeyCode keycode)
+bool Window::is_key_down(Window::KeyCode keycode) const noexcept
 {
     return key_states[static_cast<int>(keycode)] == KeyState::pressed;
 }
 
-bool Window::is_key_up(Window::KeyCode keycode)
+bool Window::is_key_up(Window::KeyCode keycode) const noexcept
 {
     return key_states[static_cast<int>(keycode)] == KeyState::released;
 }
 
-bool Window::is_key_held(Window::KeyCode keycode)
+bool Window::is_key_held(Window::KeyCode keycode) const noexcept
 {
     return key_states[static_cast<int>(keycode)] == KeyState::held ||
            key_states[static_cast<int>(keycode)] == KeyState::repeat;
@@ -213,7 +214,7 @@ void Window::mouse_click_callback(GLFWwindow* window, int button, int action, in
 
 void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 {
-    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    const auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
 
     window_ptr->mouse_position_x = x;
     window_ptr->mouse_position_y = y;
@@ -239,7 +240,7 @@ void Window::mouse_move_callback(GLFWwindow* window, double x, double y)
 
 void Window::scroll_callback(GLFWwindow* window, double x, double y)
 {
-    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    const auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     for (auto& callback : window_ptr->scroll_callbacks) callback(x, y);
 
     ImGuiIO& io = ImGui::GetIO();
@@ -251,11 +252,11 @@ Window::Settings Window::get_settings() { return active_settings; }
 
 GLFWwindow* Window::get_window_pointer() { return window_ptr; }
 
-bool Window::should_close() { return glfwWindowShouldClose(window_ptr); }
+bool Window::should_close() const noexcept { return glfwWindowShouldClose(window_ptr); }
 
 void Window::set_close() { glfwSetWindowShouldClose(window_ptr, GLFW_TRUE); }
 
-bool Window::is_mouse_locked_to_window() { return mouse_locked_to_window; }
+bool Window::is_mouse_locked_to_window() const noexcept { return mouse_locked_to_window; }
 void Window::set_mouse_window_lock(bool locked)
 {
     mouse_locked_to_window = locked;

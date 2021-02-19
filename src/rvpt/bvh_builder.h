@@ -63,13 +63,13 @@ private:
         const std::vector<glm::vec3>& primitive_centers,
         const std::vector<AABB>& bounding_boxes);
 
-    static size_t compute_bin_index(
-        int axis, const glm::vec3& center, const AABB& centers_aabb);
+    [[nodiscard]] static size_t compute_bin_index(
+        int axis, const glm::vec3& center, const AABB& centers_aabb) noexcept;
 
-    std::tuple<float, int, size_t> find_best_split(
+    [[nodiscard]] std::tuple<float, int, size_t> find_best_split(
         size_t begin, size_t end,
         const AABB& node_aabb,
         const std::vector<uint32_t>& primitive_indices,
         const std::vector<glm::vec3>& primitive_centers,
-        const std::vector<AABB>& bounding_boxes);
+        const std::vector<AABB>& bounding_boxes) const noexcept;
 };
