@@ -8,9 +8,8 @@
 #include <algorithm>
 #include <cassert>
 
-Bvh BinnedBvhBuilder::build_bvh(
-    const std::vector<glm::vec3>& primitive_centers,
-    const std::vector<AABB>& bounding_boxes)
+Bvh BinnedBvhBuilder::build_bvh(const std::vector<glm::vec3>& primitive_centers,
+                                const std::vector<AABB>& bounding_boxes)
 {
     assert(primitive_centers.size() == bounding_boxes.size());
     size_t primitive_count = primitive_centers.size();
@@ -32,28 +31,25 @@ Bvh BinnedBvhBuilder::build_bvh(
     std::iota(bvh.primitive_indices.begin(), bvh.primitive_indices.end(), 0);
 
     // Initially, we set the root node to be a leaf that spans the entire list of primitives
-    bvh.nodes.emplace_back(BvhNode {
-        .first_child_or_primitive = 0,
-        .primitive_count = static_cast<uint32_t>(primitive_count)
-    });
+    bvh.nodes.emplace_back(BvhNode{.first_child_or_primitive = 0,
+                                   .primitive_count = static_cast<uint32_t>(primitive_count)});
     build_bvh_node(bvh, bvh.nodes.front(), primitive_centers, bounding_boxes);
     bvh.nodes.shrink_to_fit();
     return bvh;
 }
 
-size_t BinnedBvhBuilder::compute_bin_index(
-    int axis, const glm::vec3& center, const AABB& aabb)
+size_t BinnedBvhBuilder::compute_bin_index(int axis, const glm::vec3& center,
+                                           const AABB& aabb) noexcept
 {
-    int index = (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]);
-    return std::min(int { bin_count - 1 }, std::max(0, index));
+    int index =
+        (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]);
+    return std::min(int{bin_count - 1}, std::max(0, index));
 }
 
 std::tuple<float, int, size_t> BinnedBvhBuilder::find_best_split(
-    size_t begin, size_t end,
-    const AABB& node_aabb,
-    const std::vector<uint32_t>& primitive_indices,
+    size_t begin, size_t end, const AABB& node_aabb, const std::vector<uint32_t>& primitive_indices,
     const std::vector<glm::vec3>& primitive_centers,
-    const std::vector<AABB>& bounding_boxes)
+    const std::vector<AABB>& bounding_boxes) const noexcept
 {
     float min_cost = std::numeric_limits<float>::max();
     size_t min_bin = 0;
@@ -114,10 +110,9 @@ std::tuple<float, int, size_t> BinnedBvhBuilder::find_best_split(
     return std::make_tuple(min_cost, min_axis, min_bin);
 }
 
-void BinnedBvhBuilder::build_bvh_node(
-    Bvh& bvh, BvhNode& node_to_build,
-    const std::vector<glm::vec3>& primitive_centers,
-    const std::vector<AABB>& bounding_boxes)
+void BinnedBvhBuilder::build_bvh_node(Bvh& bvh, BvhNode& node_to_build,
+                                      const std::vector<glm::vec3>& primitive_centers,
+                                      const std::vector<AABB>& bounding_boxes)
 {
     assert(node_to_build.is_leaf());
     const size_t primitives_begin = node_to_build.first_child_or_primitive;
@@ -129,47 +124,45 @@ void BinnedBvhBuilder::build_bvh_node(
         node_to_build.aabb().expand(bounding_boxes[bvh.primitive_indices[i]]);
 
     // If the node has too few primitives, keep it a leaf
-    if (node_to_build.primitive_count < min_primitives_per_leaf)
-        return;
+    if (node_to_build.primitive_count < min_primitives_per_leaf) return;
 
-    auto [min_cost, min_axis, min_bin] = find_best_split(
-        primitives_begin, primitives_end,
-        node_to_build.aabb(),
-        bvh.primitive_indices,
-        primitive_centers,
-        bounding_boxes);
+    auto [min_cost, min_axis, min_bin] =
+        find_best_split(primitives_begin, primitives_end, node_to_build.aabb(),
+                        bvh.primitive_indices, primitive_centers, bounding_boxes);
 
     float no_split_cost = node_to_build.aabb().half_area() * node_to_build.primitive_count;
     size_t right_partition_begin = 0;
     if (min_cost >= no_split_cost)
     {
-        // If the split returned by binning is not better than not splitting, we have 2 possibilities:
+        // If the split returned by binning is not better than not splitting, we have 2
+        // possibilities:
         // - The number of primitives is low, so having a leaf here is fine,
         // - The number of primitives is too high and we need a fallback strategy.
-        if (node_to_build.primitive_count <= max_primitives_per_leaf)
-            return;
+        if (node_to_build.primitive_count <= max_primitives_per_leaf) return;
 
-        // The fallback strategy here is just to sort primitives along the split axis and pick the median.
-        // This ensures that, even if this split is not useful, we have a chance of making good splits in
-        // the two children.
-        std::sort(
-            bvh.primitive_indices.begin() + primitives_begin,
-            bvh.primitive_indices.begin() + primitives_end,
-            [&primitive_centers, min_axis = min_axis] (size_t i, size_t j)
-            {
-                return primitive_centers[i][min_axis] < primitive_centers[j][min_axis];
-            });
+        // The fallback strategy here is just to sort primitives along the split axis and pick the
+        // median. This ensures that, even if this split is not useful, we have a chance of making
+        // good splits in the two children.
+        std::sort(bvh.primitive_indices.begin() + primitives_begin,
+                  bvh.primitive_indices.begin() + primitives_end,
+                  [&primitive_centers, min_axis = min_axis](size_t i, size_t j) {
+                      return primitive_centers[i][min_axis] < primitive_centers[j][min_axis];
+                  });
         right_partition_begin = primitives_begin + node_to_build.primitive_count / 2;
-    } else {
+    }
+    else
+    {
         // This split is good, we just need to partition the primitives accordingly
-        right_partition_begin = std::partition(
-            bvh.primitive_indices.begin() + primitives_begin,
-            bvh.primitive_indices.begin() + primitives_end,
-            [&primitive_centers, &node_to_build, min_axis = min_axis, min_bin = min_bin] (size_t i)
-            {
-                size_t bin_index = compute_bin_index(min_axis, primitive_centers[i], node_to_build.aabb());
-                return bin_index < min_bin;
-            }) - bvh.primitive_indices.begin();
+        right_partition_begin =
+            std::partition(bvh.primitive_indices.begin() + primitives_begin,
+                           bvh.primitive_indices.begin() + primitives_end,
+                           [&primitive_centers, &node_to_build, min_axis = min_axis,
+                            min_bin = min_bin](size_t i) {
+                               size_t bin_index = compute_bin_index(min_axis, primitive_centers[i],
+                                                                    node_to_build.aabb());
+                               return bin_index < min_bin;
+                           }) -
+            bvh.primitive_indices.begin();
     }
     assert(right_partition_begin > primitives_begin && right_partition_begin < primitives_end);
 
@@ -180,11 +173,11 @@ void BinnedBvhBuilder::build_bvh_node(
     node_to_build.primitive_count = 0;
     node_to_build.first_child_or_primitive = first_child_index;
 
-    left_child.primitive_count  = right_partition_begin - primitives_begin;
+    left_child.primitive_count = right_partition_begin - primitives_begin;
     left_child.first_child_or_primitive = primitives_begin;
     right_child.primitive_count = primitives_end - right_partition_begin;
     right_child.first_child_or_primitive = right_partition_begin;
 
-    build_bvh_node(bvh, left_child,  primitive_centers, bounding_boxes);
+    build_bvh_node(bvh, left_child, primitive_centers, bounding_boxes);
     build_bvh_node(bvh, right_child, primitive_centers, bounding_boxes);
 }

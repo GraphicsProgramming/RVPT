@@ -18,9 +18,9 @@ public:
     void frame_start();
     void frame_stop();
 
-    double time_since_start();
-    double average_frame_time();
-    double since_last_frame();
+    [[nodiscard]] double time_since_start() const noexcept;
+    [[nodiscard]] double average_frame_time() const noexcept;
+    [[nodiscard]] double since_last_frame() const noexcept;
 
     double fastest_frame = std::numeric_limits<double>::max();
     double slowest_frame = std::numeric_limits<double>::min();

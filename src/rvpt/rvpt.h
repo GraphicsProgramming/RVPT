@@ -218,13 +218,13 @@ private:
     std::vector<PerFrameData> per_frame_data;
 
     // helper functions
-    bool context_init();
-    bool swapchain_init();
-    bool swapchain_reinit();
-    bool swapchain_get_images();
+    [[nodiscard]] bool context_init();
+    [[nodiscard]] bool swapchain_init();
+    [[nodiscard]] bool swapchain_reinit();
+    [[nodiscard]] bool swapchain_get_images();
     void create_framebuffers();
 
-    RenderingResources create_rendering_resources();
+    [[nodiscard]] RenderingResources create_rendering_resources();
     void add_per_frame_data(int index);
 
     void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
