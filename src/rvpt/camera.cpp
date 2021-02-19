@@ -24,58 +24,37 @@ glm::mat4 construct_camera_matrix(glm::vec3 translation, glm::vec3 rotation)
     return mat;
 }
 
-Camera::Camera(float aspect) : aspect(aspect) { recalculate_values(); }
+Camera::Camera(float aspect) : aspect(aspect) { _update_values(); }
 
-void Camera::move(glm::vec3 translation)
+void Camera::translate(const glm::vec3 &in_translation)
 {
-    auto translation_mat = construct_camera_matrix(this->translation, this->rotation);
-    this->translation += glm::vec3(translation_mat * glm::vec4(translation, 0));
+    const auto translation_mat = construct_camera_matrix(translation, rotation);
+    translation += glm::vec3(translation_mat * glm::vec4(in_translation, 0));
 }
 
-void Camera::rotate(glm::vec3 rotation)
+void Camera::rotate(const glm::vec3 &in_rotation)
 {
-    this->rotation += rotation;
-    if (vertical_view_angle_clamp) this->rotation.y = glm::clamp(this->rotation.y, -90.f, 90.f);
+    rotation += in_rotation;
+    if (vertical_view_angle_clamp) rotation.y = glm::clamp(rotation.y, -90.f, 90.f);
 }
+
 void Camera::set_fov(float in_fov) { fov = in_fov; }
-
-float Camera::get_fov() { return fov; }
 
 void Camera::set_scale(float in_scale) { scale = in_scale; }
 
-float Camera::get_scale() { return scale; }
-
 void Camera::set_camera_mode(int in_mode) { mode = in_mode; }
-
-int Camera::get_camera_mode() { return mode; }
 
 void Camera::clamp_vertical_view_angle(bool clamp) { vertical_view_angle_clamp = clamp; }
 
-void Camera::recalculate_values()
-{
-    float theta = glm::radians(fov);
-    float view_height = tanf(theta / 2);
-    float view_width = aspect * view_height;
+float Camera::get_fov() const noexcept { return fov; }
 
-    camera_matrix = construct_camera_matrix(this->translation, this->rotation);
+float Camera::get_scale() const noexcept { return scale; }
 
-    view_matrix = glm::inverse(camera_matrix);
-
-    if (mode == 0)
-    {
-        pv_matrix = glm::perspectiveLH_ZO(glm::radians(fov), aspect, 0.1f, 1000.f) * view_matrix;
-    }
-    else if (mode == 1)
-    {
-        pv_matrix = glm::orthoLH_ZO(-view_width * scale, view_width * scale, -view_height * scale,
-                                    view_height * scale, 0.1f, 1000.f) *
-                    view_matrix;
-    }
-}
+int Camera::get_camera_mode() const noexcept { return mode; }
 
 std::vector<glm::vec4> Camera::get_data()
 {
-    recalculate_values();
+    _update_values();
     std::vector<glm::vec4> data;
     data.emplace_back(camera_matrix[0]);
     data.emplace_back(camera_matrix[1]);
@@ -88,19 +67,19 @@ std::vector<glm::vec4> Camera::get_data()
 
 glm::mat4 Camera::get_camera_matrix()
 {
-    recalculate_values();
+    _update_values();
     return camera_matrix;
 }
 
 glm::mat4 Camera::get_view_matrix()
 {
-    recalculate_values();
+    _update_values();
     return view_matrix;
 }
 
 glm::mat4 Camera::get_pv_matrix()
 {
-    recalculate_values();
+    _update_values();
     return pv_matrix;
 }
 
@@ -147,5 +126,30 @@ void Camera::update_imgui()
         }
     }
     ImGui::End();
-    recalculate_values();
+    _update_values();
+}
+
+void Camera::_update_values()
+{
+    const auto theta = glm::radians(fov);
+    const auto view_height = tanf(theta / 2);
+    const auto view_width = aspect * view_height;
+
+    camera_matrix = construct_camera_matrix(translation, rotation);
+
+    view_matrix = glm::inverse(camera_matrix);
+
+    switch (mode)
+    {
+        case 0:
+            pv_matrix =
+                glm::perspectiveLH_ZO(glm::radians(fov), aspect, 0.1f, 1000.f) * view_matrix;
+            break;
+
+        case 1:
+            pv_matrix = glm::orthoLH_ZO(-view_width * scale, view_width * scale,
+                                        -view_height * scale, view_height * scale, 0.1f, 1000.f) *
+                        view_matrix;
+            break;
+    }
 }

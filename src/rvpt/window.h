@@ -174,23 +174,23 @@ public:
 
     void setup_imgui();
 
-    float get_aspect_ratio();
+    [[nodiscard]] float get_aspect_ratio() const noexcept;
     void add_mouse_click_callback(MouseClickCallback callback);
     void add_mouse_move_callback(MouseMoveCallback callback);
     void add_scroll_callback(MouseScrollCallback callback);
     void poll_events();
 
-    bool is_key_down(KeyCode keycode);
-    bool is_key_up(KeyCode keycode);
-    bool is_key_held(KeyCode keycode);
+    [[nodiscard]] bool is_key_down(KeyCode keycode) const noexcept;
+    [[nodiscard]] bool is_key_up(KeyCode keycode) const noexcept;
+    [[nodiscard]] bool is_key_held(KeyCode keycode) const noexcept;
 
-    Settings get_settings();
-    GLFWwindow* get_window_pointer();
+    [[nodiscard]] Settings get_settings();
+    [[nodiscard]] GLFWwindow* get_window_pointer();
 
-    bool should_close();
+    [[nodiscard]] bool should_close() const noexcept;
     void set_close();
 
-    bool is_mouse_locked_to_window();
+    [[nodiscard]] bool is_mouse_locked_to_window() const noexcept;
     void set_mouse_window_lock(bool locked);
 
 private:

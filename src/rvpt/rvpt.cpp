@@ -1049,12 +1049,7 @@ void RVPT::add_triangle(Triangle triangle) { triangles.emplace_back(triangle); }
 
 void RVPT::get_asset_path(std::string& asset_path)
 {
-    // I'm 99% sure this method can be made a lot faster, which it 100% can.
-    // but I really cannot be asked.
-    // Is this method even required? Could we be doing something else? Most likely yes.
-    // Any idea dm me on discord Legend#4321
-
-    if (source_folder == "")
+    if (source_folder.empty())
     {
         fmt::print("source folder not set, unable to get asset path\n");
         return;

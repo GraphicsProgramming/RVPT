@@ -14,33 +14,33 @@ class Camera
 public:
     explicit Camera(float aspect);
 
-    void move(glm::vec3 translation);
-    void rotate(glm::vec3 rotation);
+    void translate(const glm::vec3 &in_translation);
+    void rotate(const glm::vec3 &in_rotation);
 
     void set_fov(float fov);
-    float get_fov();
 
     void set_scale(float scale);
-    float get_scale();
 
     void set_camera_mode(int mode);
-    int get_camera_mode();
 
     // Prevent looking beyond +/- 90 degrees vertically
     void clamp_vertical_view_angle(bool clamp);
 
-    void position_lock(bool locked);
-    void rotation_lock(bool locked);
-
     void update_imgui();
 
-    std::vector<glm::vec4> get_data();
-    glm::mat4 get_camera_matrix();
-    glm::mat4 get_view_matrix();
-    glm::mat4 get_pv_matrix();
+    [[nodiscard]] float get_fov() const noexcept;
+
+    [[nodiscard]] float get_scale() const noexcept;
+
+    [[nodiscard]] int get_camera_mode() const noexcept;
+
+    [[nodiscard]] std::vector<glm::vec4> get_data();
+    [[nodiscard]] glm::mat4 get_camera_matrix();
+    [[nodiscard]] glm::mat4 get_view_matrix();
+    [[nodiscard]] glm::mat4 get_pv_matrix();
 
 private:
-    void recalculate_values();
+    void _update_values();
     int mode = 0;
     float fov = 90.f, scale = 4.f, aspect{};
     bool vertical_view_angle_clamp = false;

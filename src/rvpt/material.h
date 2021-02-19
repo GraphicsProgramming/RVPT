@@ -14,7 +14,7 @@ struct Material
         MIRROR,
         DIELECTRIC
     };
-    explicit Material(glm::vec4 albedo, glm::vec4 emission, Type type)
+    explicit Material(const glm::vec4 &albedo, const glm::vec4 &emission, Type type)
         : albedo(albedo), emission(emission)
     {
         data = glm::vec4();
