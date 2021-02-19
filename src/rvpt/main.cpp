@@ -105,7 +105,7 @@ int main()
 
     RVPT rvpt(window);
 
-    load_model(rvpt, "models/rabbit.obj", 1);
+    load_model(rvpt, "models/tridel-interior-test.obj", 1);
 
     // Setup Demo Scene
     rvpt.add_material(

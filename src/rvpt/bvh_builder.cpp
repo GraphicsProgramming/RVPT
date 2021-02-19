@@ -155,7 +155,7 @@ void BinnedBvhBuilder::build_bvh_node(
         std::sort(
             bvh.primitive_indices.begin() + primitives_begin,
             bvh.primitive_indices.begin() + primitives_end,
-            [&] (size_t i, size_t j)
+            [&primitive_centers, min_axis = min_axis] (size_t i, size_t j)
             {
                 return primitive_centers[i][min_axis] < primitive_centers[j][min_axis];
             });
@@ -165,7 +165,7 @@ void BinnedBvhBuilder::build_bvh_node(
         right_partition_begin = std::partition(
             bvh.primitive_indices.begin() + primitives_begin,
             bvh.primitive_indices.begin() + primitives_end,
-            [&] (size_t i)
+            [&primitive_centers, &node_to_build, min_axis = min_axis, min_bin = min_bin] (size_t i)
             {
                 size_t bin_index = compute_bin_index(min_axis, primitive_centers[i], node_to_build.aabb());
                 return bin_index < min_bin;
