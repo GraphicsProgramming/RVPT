@@ -103,7 +103,7 @@ int main()
 
     RVPT rvpt(window);
 
-    load_model(rvpt, "models/rabbit.obj", 1);
+    load_model(rvpt, "models/tridel-interior-test.obj", 1);
 
     // Setup Demo Scene
     rvpt.add_material(Material(glm::vec4(1, 1, 1, 0), glm::vec4(0.1, 0.4, 0.6, 0),

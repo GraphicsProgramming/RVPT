@@ -491,6 +491,8 @@ bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 				Isect temp_isect;
 				if (intersect_triangle_fast(ray, v0, v1, v2, mint, closest_t, temp_isect)) {
 					info = temp_isect;
+					Material mat = materials[int(triangle.mat_id.x)];
+					info.mat = convert_old_material(mat);
 					closest_t = temp_isect.t;
 				}
 			}
@@ -575,7 +577,7 @@ bool intersect_scene
 	Isect temp_isect;
 
 	/* intersect spheres */
-	for (int i = 0; i < spheres.length(); i++)
+	for (int i = 0; i < 0; i++)
 	{
 		Sphere sphere = spheres[i];
 		
