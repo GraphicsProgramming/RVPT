@@ -102,7 +102,7 @@ int main()
 
     RVPT rvpt(window);
 
-    load_model(rvpt, "models/nissan-gtr-2.obj", 1);
+    load_model(rvpt, "models/bunny.obj", 1);
 
     // Setup Demo Scene
     rvpt.add_material(
