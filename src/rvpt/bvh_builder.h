@@ -66,7 +66,13 @@ private:
     [[nodiscard]] static size_t compute_bin_index(
         int axis, const glm::vec3& center, const AABB& centers_aabb) noexcept;
 
-    [[nodiscard]] std::tuple<float, int, size_t> find_best_split(
+    struct BestSplit
+    {
+        float min_cost;
+        int min_axis;
+        size_t min_bin;
+    };
+    [[nodiscard]] BestSplit find_best_split(
         size_t begin, size_t end,
         const AABB& node_aabb,
         const std::vector<uint32_t>& primitive_indices,

@@ -46,7 +46,7 @@ size_t BinnedBvhBuilder::compute_bin_index(int axis, const glm::vec3& center,
     return std::min(int{bin_count - 1}, std::max(0, index));
 }
 
-std::tuple<float, int, size_t> BinnedBvhBuilder::find_best_split(
+BinnedBvhBuilder::BestSplit BinnedBvhBuilder::find_best_split(
     size_t begin, size_t end, const AABB& node_aabb, const std::vector<uint32_t>& primitive_indices,
     const std::vector<glm::vec3>& primitive_centers,
     const std::vector<AABB>& bounding_boxes) const noexcept
@@ -107,7 +107,11 @@ std::tuple<float, int, size_t> BinnedBvhBuilder::find_best_split(
     }
 
     assert(min_axis != -1);
-    return std::make_tuple(min_cost, min_axis, min_bin);
+    auto best = BestSplit();
+    best.min_cost = min_cost;
+    best.min_axis = min_axis;
+    best.min_bin = min_bin;
+    return best;
 }
 
 void BinnedBvhBuilder::build_bvh_node(Bvh& bvh, BvhNode& node_to_build,
