@@ -77,7 +77,7 @@ void update_camera(Window& window, RVPT& rvpt)
     if (window.is_key_held(Window::KeyCode::KEY_D)) movement.x += 3.0f;
     if (window.is_key_held(Window::KeyCode::KEY_A)) movement.x -= 3.0f;
 
-    rvpt.scene_camera.move(static_cast<float>(frameDelta) * movement);
+    rvpt.scene_camera.translate(static_cast<float>(frameDelta) * movement);
 
     glm::vec3 rotation{};
     float rot_speed = 0.3f;
@@ -102,7 +102,7 @@ int main()
 
     RVPT rvpt(window);
 
-    load_model(rvpt, "models/tridel-interior-test.obj", 1);
+    load_model(rvpt, "models/nissan-gtr-2.obj", 1);
 
     // Setup Demo Scene
     rvpt.add_material(
