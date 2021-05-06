@@ -34,7 +34,7 @@ double Timer::time_since_start() const noexcept
 
 double Timer::average_frame_time() const noexcept
 {
-    const auto total = 0.0;
+    auto total = 0.0;
     for (auto& timer : past_frame_times) total += timer;
     return total / past_frame_times.size();
 }

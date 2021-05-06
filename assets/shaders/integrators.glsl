@@ -565,7 +565,7 @@ vec3 integrator_Kajiya
 	
         /* intersected nothing -> background */
         if (!intersect_scene (ray, mint, maxt, info))
-            return col + throughput*mix(white, blue, ray.direction.y);
+            return col + throughput*mix(white, blue, ray.direction.y * 0.5 + 0.5);
         
         /* intersected an object -> add emission */
         col += throughput*info.mat.emissive;

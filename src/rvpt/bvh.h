@@ -51,7 +51,7 @@ struct BvhNode
         [[nodiscard]] float half_area() const { return aabb().half_area(); }
     };
 
-    AABB aabb() { return AABBProxy(*this); }
+    AABBProxy aabb() { return AABBProxy(*this); }
     [[nodiscard]] AABB aabb() const { return AABBProxy(const_cast<BvhNode&>(*this)); }
 
     [[nodiscard]] bool is_leaf() const { return primitive_count != 0; }
