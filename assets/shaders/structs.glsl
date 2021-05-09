@@ -1,10 +1,3 @@
-struct Sphere
-{
-    vec3 origin;
-    float radius;
-    vec4 mat_id;
-};
-
 struct Triangle
 {
     vec4 vert0;

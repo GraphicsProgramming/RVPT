@@ -19,16 +19,9 @@
 /*--------------------------------------------------------------------------*/
 
 ivec2 image_size = imageSize(result_image);
-//uint base_index = (gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_size.x) ^ 237283 * image_size.y;
 
 uint index = 0;
 
-/*
-float rand () {
-   return random_source[(base_index ^ ++index * 3927492) % random_source.length()];
-}*/
-
-    
 uint wang_hash(uint seed)
 {
     seed = (seed ^ 61) ^ (seed >> 16);
