@@ -67,7 +67,6 @@ public:
     void set_raytrace_mode(int mode);
 
     void add_material(Material material);
-    void add_sphere(Sphere sphere);
     void add_triangle(Triangle triangle);
 
     void get_asset_path(std::string& asset_path);
@@ -121,7 +120,6 @@ private:
     int max_bvh_view_depth = 1;
     bool view_previous_depths = true;
 
-    std::vector<Sphere> spheres;
     std::vector<Triangle> triangles;
     std::vector<Triangle> sorted_triangles;
     std::vector<Material> materials;
@@ -199,7 +197,6 @@ private:
         VK::Buffer random_buffer;
         VK::Buffer camera_uniform;
         VK::Buffer bvh_buffer;
-        VK::Buffer sphere_buffer;
         VK::Buffer triangle_buffer;
         VK::Buffer material_buffer;
         VK::CommandBuffer raytrace_command_buffer;

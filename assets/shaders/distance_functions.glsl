@@ -22,22 +22,6 @@ struct IsectM
 
 /*--------------------------------------------------------------------------*/
 
-float distance_sphere
-
-    (vec3 p)
-    
-/*
-    Returns the signed distance from p to the surface of the unit sphere 
-    centered at (0,0,0).
-*/ 
-
-{
-    return length(p)-1.0;
-
-} /* distance_sphere */
-
-/*--------------------------------------------------------------------------*/
-
 float dot2( in vec2 v ) { return dot(v,v); }
 float dot2( in vec3 v ) { return dot(v,v); }
 
@@ -103,14 +87,6 @@ float intersect_scene_st
     float min_radius;
     for (i=0; i<MARCH_ITER; ++i)
     {
-        for (int j=0; j<spheres.length(); ++j)
-        {
-            Sphere sphere = spheres[j];
-            vec3 p_tform = (p - sphere.origin)/sphere.radius;
-            float dist = sphere.radius * distance_sphere(p_tform);
-            s_radius_idx = min_idx(s_radius_idx, vec2(dist, j));
-        }
-        
         t_radius_idx = vec2(INF, -1);
         for (int j=0; j<triangles.length(); ++j)
         {

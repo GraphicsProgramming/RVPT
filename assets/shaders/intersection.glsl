@@ -73,93 +73,6 @@ struct Isect
 
 /*--------------------------------------------------------------------------*/
 
-bool intersect_sphere_any
-
-	(Ray   ray,  /* ray for the intersection */
-	 float mint, /* lower bound for t */
-	 float maxt) /* upper bound for t */
-	 
-/*
-	Returns true if there is an intersection with the unit sphere 
-	with origin (0,0,0). The intersection is accepted if it is in 
-	(mint, maxt) along the ray.
-	
-	For the derivation see the appendix.
-*/
-	 
-{
-	/* A*t^2 - 2*B*t + C = 0 */
-	float A = dot(ray.direction, ray.direction);
-	float B = -dot(ray.direction, ray.origin);
-	float C = dot(ray.origin, ray.origin) - 1;
-	
-	/* discriminant */
-	float D = B*B-A*C;
-	D = D>0 ? sqrt(D) : INF;
-	
-	/* compute the two roots */
-	float t1 = (B-D)/A;
-	float t2 = (B+D)/A;
-	
-	/* check bounds validity in (mint, maxt) */
-	t1 = mint < t1 && t1 < maxt ? t1 : INF;
-	t2 = mint < t2 && t2 < maxt ? t2 : INF;
-
-	/* pick the closest valid root */
-	return min(t1,t2)<INF;
-	
-} /* intersect_sphere_any */
-
-/*--------------------------------------------------------------------------*/
-
-bool intersect_sphere
-
-	(Ray       ray,  /* ray for the intersection */
-	 float     mint, /* lower bound for t */
-	 float     maxt, /* upper bound for t */
-	 out Isect info) /* intersection data */
-	 
-/*
-	Returns true if there is an intersection with the unit sphere 
-	with origin (0,0,0). The intersection is accepted if it is in 
-	(mint, maxt) along the ray. Additionally, the intersection 
-	position and normal are computed (the direction of the normal is 
-	outside facing).
-	
-	For the derivation see the appendix.
-*/
-	 
-{
-
-	/* A*t^2 - 2*B*t + C = 0 */
-	float A = dot(ray.direction, ray.direction);
-	float B = -dot(ray.direction, ray.origin);
-	float C = dot(ray.origin, ray.origin) - 1;
-	
-	/* discriminant */
-	float D = B*B-A*C;
-	D = D>0 ? sqrt(D) : INF;
-	
-	/* compute the two roots */
-	float t1 = (B-D)/A;
-	float t2 = (B+D)/A;
-	
-	/* check bounds validity in (mint, maxt) */
-	t1 = mint < t1 && t1 < maxt ? t1 : INF;
-	t2 = mint < t2 && t2 < maxt ? t2 : INF;
-
-	/* compute intersection data */
-	info.t = min(t1,t2);
-	info.pos = ray.origin + info.t*ray.direction;
-	info.normal = info.pos;
-	info.uv = vec2(0);
-	
-	return info.t<INF;
-	
-} /* intersect_sphere  */
-
-/*--------------------------------------------------------------------------*/
-
 bool intersect_plane_any
 
 	(Ray   ray,  /* ray for the intersection */
@@ -528,21 +441,6 @@ bool intersect_scene_any
 */
 	 
 {
-	/* intersect spheres */
-	for (int i = 0; i < spheres.length(); i++)
-	{
-		Sphere sphere = spheres[i];
-		
-		/* inverse transform on the ray, needs to be changed to 3x3/4x4 mat */
-		Ray temp_ray;
-		temp_ray.origin = (ray.origin - sphere.origin)/sphere.radius;
-		temp_ray.direction = ray.direction / sphere.radius;
-		
-		/* early out */
-		if (intersect_sphere_any(temp_ray, mint, maxt))
-			return true;
-	}
-	
 	/* intersect triangles */
 	for (int i = 0; i < triangles.length(); i++)
 	{
@@ -576,32 +474,6 @@ bool intersect_scene
 	info.normal = vec3(0);
 	Isect temp_isect;
 
-	/* intersect spheres */
-	for (int i = 0; i < 0; i++)
-	{
-		Sphere sphere = spheres[i];
-		
-		/* inverse transform on the ray, needs to be changed to 3x3/4x4 mat */
-		Ray temp_ray;
-		temp_ray.origin = (ray.origin - sphere.origin) / sphere.radius;
-		temp_ray.direction = ray.direction / sphere.radius;
-		
-		/*
-		 g(x) = 0, x \in S
-		 M(x) \in M(S) -> g(M^{-1}(x)) = 0 -> x \in S
-		*/
-
-		//intersect_sphere(temp_ray, mint, closest_t, temp_isect);
-		intersect_sphere(temp_ray, mint, closest_t, temp_isect);
-		if (temp_isect.t<closest_t)
-		{
-			info = temp_isect;
-			Material mat = materials[int(sphere.mat_id.x)];
-			info.mat = convert_old_material(mat);
-		}
-		closest_t = min(temp_isect.t, closest_t);
-	}
-
 	/* Intersect BVHs and get the primitives that are possibly intersected (Triangles Only) */
 
 	if (intersect_bvh(ray, mint, closest_t, temp_isect))
@@ -609,29 +481,6 @@ bool intersect_scene
 		closest_t = temp_isect.t;
 		info = temp_isect;
 	}
-
-	/* intersect triangles */
-
-	/*
-	for (int i = 0; i < triangles.length(); i++)
-	{
-		Triangle triangle = triangles[i];
-		intersect_triangle_fast(ray,
-								triangle.vert0.xyz,
-								triangle.vert1.xyz,
-								triangle.vert2.xyz,
-								mint,
-								closest_t,
-								temp_isect);
-		if (temp_isect.t<closest_t)
-		{
-			info = temp_isect;
-			Material mat = materials[int(triangle.mat_id.x)];
-			info.mat = convert_old_material(mat);
-		}
-		closest_t = min(temp_isect.t, closest_t);
-	}
-//	*/
 
 	info.normal = closest_t<INF? normalize(info.normal) : vec3(0);
 
@@ -829,40 +678,6 @@ bool intersect_scene
 */
 
 /*--------------------------------------------------------------------------*/
-
-bool intersect_spheres(Ray ray, inout Record record)
-{
-    float lowest = record.distance;
-    for (int i = 0; i < spheres.length(); i++)
-    {
-        Sphere sphere = spheres[i];
-        vec3 oc = ray.origin - sphere.origin;
-        float b = dot(oc, ray.direction);
-        float c = dot(oc, oc) - sphere.radius * sphere.radius;
-        float delta = b * b - c;
-
-        if (delta > 0.0f)
-        {
-            delta = sqrt(delta);
-            float t0 = (-b - delta);
-            float t1 = (-b + delta);
-            float distance = min(t0, t1);
-            if (!(t0 < 0 || t1 < 0) && RAY_MIN_DIST < distance && (distance < lowest || lowest < 0))
-            {
-                lowest = distance;
-                record.hit = true;
-                record.distance = distance;
-                record.intersection = ray.origin + ray.direction * distance;
-                record.normal = normalize(record.intersection - sphere.origin);
-                record.mat = materials[int(sphere.mat_id.x)];
-                record.albedo = materials[int(sphere.mat_id.x)].albedo.xyz;
-                record.emission = materials[int(sphere.mat_id).x].emission.xyz;
-            }
-        }
-    }
-    return lowest > 0;
-}
-
 
 bool intersect_triangles(Ray ray, inout Record record)
 {

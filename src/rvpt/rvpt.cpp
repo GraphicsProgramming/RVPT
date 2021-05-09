@@ -118,7 +118,6 @@ bool RVPT::update()
     float delta = static_cast<float>(time.since_last_frame());
 
     per_frame_data[current_frame_index].bvh_buffer.copy_to(top_level_bvh.nodes);
-    per_frame_data[current_frame_index].sphere_buffer.copy_to(spheres);
     per_frame_data[current_frame_index].triangle_buffer.copy_to(sorted_triangles);
     per_frame_data[current_frame_index].material_buffer.copy_to(materials);
 
@@ -649,7 +648,6 @@ RVPT::RenderingResources RVPT::create_rendering_resources()
         {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         {7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        {8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
     };
 
     auto raytrace_descriptor_pool = VK::DescriptorPool(
@@ -823,10 +821,6 @@ void RVPT::add_per_frame_data(int index)
         VK::Buffer(vk_device, memory_allocator, "bvh_buffer_" + std::to_string(index),
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(BvhNode) * top_level_bvh.nodes.size(),
                    VK::MemoryUsage::cpu_to_gpu);
-    auto sphere_buffer =
-        VK::Buffer(vk_device, memory_allocator, "spheres_buffer_" + std::to_string(index),
-                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Sphere) * spheres.size(),
-                   VK::MemoryUsage::cpu_to_gpu);
     auto triangle_buffer =
         VK::Buffer(vk_device, memory_allocator, "triangles_buffer_" + std::to_string(index),
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(Triangle) * triangles.size(),
@@ -861,7 +855,6 @@ void RVPT::add_per_frame_data(int index)
     raytracing_descriptors.push_back(std::vector{random_buffer.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{camera_uniform.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{bvh_buffer.descriptor_info()});
-    raytracing_descriptors.push_back(std::vector{sphere_buffer.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{triangle_buffer.descriptor_info()});
     raytracing_descriptors.push_back(std::vector{material_buffer.descriptor_info()});
 
@@ -903,7 +896,7 @@ void RVPT::add_per_frame_data(int index)
 
     per_frame_data.push_back(RVPT::PerFrameData{
         std::move(settings_uniform), std::move(output_image), std::move(random_buffer),
-        std::move(camera_uniform), std::move(bvh_buffer), std::move(sphere_buffer),
+        std::move(camera_uniform), std::move(bvh_buffer),
         std::move(triangle_buffer), std::move(material_buffer), std::move(raytrace_command_buffer),
         std::move(raytrace_work_fence), image_descriptor_set, raytracing_descriptor_set,
         std::move(debug_camera_uniform), std::move(debug_vertex_buffer), debug_descriptor_set,
@@ -1042,8 +1035,6 @@ void RVPT::record_compute_command_buffer()
 }
 
 void RVPT::add_material(Material material) { materials.emplace_back(material); }
-
-void RVPT::add_sphere(Sphere sphere) { spheres.emplace_back(sphere); }
 
 void RVPT::add_triangle(Triangle triangle) { triangles.emplace_back(triangle); }
 

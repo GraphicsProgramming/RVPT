@@ -49,9 +49,8 @@ ivec2 dim = imageSize(result_image);
 uint iframe = render_settings.current_frame;
 
 layout(std430, binding = 5) buffer BvhNodes { BvhNode bvh_nodes[]; };
-layout(std430, binding = 6) buffer Spheres { Sphere spheres[]; };
-layout(std430, binding = 7) buffer Triangles { Triangle triangles[]; };
-layout(std430, binding = 8) buffer Materials { Material materials[]; };
+layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
+layout(std430, binding = 7) buffer Materials { Material materials[]; };
 
 #include "util.glsl"
 #include "camera.glsl"
@@ -60,47 +59,6 @@ layout(std430, binding = 8) buffer Materials { Material materials[]; };
 #include "distance_functions.glsl"
 #include "material.glsl"
 #include "integrators.glsl"
-
-bool colour(inout Ray ray, inout Record record)
-{
-    record.distance = -1;
-    bool intersected = intersect_spheres(ray, record);
-    intersected = intersect_triangles(ray, record) || intersected;
-
-    if (intersected)
-    {
-        apply_record(ray, record);
-        return true;
-    }
-    else
-    {
-        record.albedo = vec3(0);
-//        record.emission = mix(vec3(0.9, 0.9, 1), vec3(.6, 0.6, 1), (ray.direction.y - 0.5) * 2);
-         record.emission = vec3(0);
-        record.reflectiveness = 0.0;
-        return false;
-    }
-}
-
-vec3 trace(in Ray ray)
-{
-    vec3 throughput = vec3(1);
-    vec3 final = vec3(0);
-
-    Record record;
-    for (int i = 0; i < render_settings.max_bounces; i++)
-    {
-        if (!colour(ray, record))
-        {
-            final += throughput * record.emission;
-            break;
-        }
-        final += throughput * record.emission;
-        throughput *= record.albedo * record.reflectiveness;
-    }
-
-    return final;
-}
 
 vec3 eval_integrator
 
