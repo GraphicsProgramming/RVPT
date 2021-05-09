@@ -58,18 +58,18 @@ target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_js
 if (DEBUG)
     if (WIN32)
         target_compile_options(rvpt PUBLIC /fsanitize=address)
-    else ()
+    else()
         target_compile_options(rvpt PUBLIC -fsanitize=address)
-    endif ()
-endif ()
+    endif()
+endif()
 
 # Determine whether we're compiling with clang++
 string(FIND "${CMAKE_CXX_COMPILER}" "clang++" RVPT_COMPILER_CLANGPP)
-if (RVPT_COMPILER_CLANGPP GREATER -1)
+if(RVPT_COMPILER_CLANGPP GREATER -1)
     set(RVPT_COMPILER_CLANGPP 1)
-else ()
+else()
     set(RVPT_COMPILER_CLANGPP 0)
-endif ()
+endif()
 
 target_compile_options(rvpt
         INTERFACE
@@ -86,17 +86,17 @@ target_compile_options(rvpt
 
 
 #compile shaders in assets/shaders
-if (WIN32)
+if(WIN32)
     add_custom_target(compile-shaders ALL
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
             COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.bat
-            DEPENDS rvpt)
-else (UNIX)
+            DEPENDS ${shader_files})
+else(UNIX)
     add_custom_target(compile-shaders ALL
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/shaders/
             COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.sh
-            DEPENDS rvpt)
-endif ()
+            DEPENDS ${shader_files})
+endif()
 
 # copies files to the build folder
 add_custom_target(copy-asset-files ALL
@@ -107,6 +107,6 @@ add_dependencies(rvpt compile-shaders)
 
 # sets up path to source directory, useful for shader hot reloading
 configure_file (
-    "${PROJECT_SOURCE_DIR}/scripts/project_configuration.json.in"
-    "${PROJECT_BINARY_DIR}/project_configuration.json"
+        "${PROJECT_SOURCE_DIR}/scripts/project_configuration.json.in"
+        "${PROJECT_BINARY_DIR}/project_configuration.json"
 )
