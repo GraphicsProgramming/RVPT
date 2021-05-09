@@ -799,11 +799,11 @@ void RVPT::add_per_frame_data(int index)
     auto output_image = VK::Image(vk_device, memory_allocator, *graphics_queue,
                                   "raytrace_output_image_" + std::to_string(index),
                                   VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-                                  window_ref.get_settings().width, window_ref.get_settings().height,
+                                  window_ref.get_settings().width / resolution_scale, window_ref.get_settings().height / resolution_scale,
                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                                   VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT,
-                                  static_cast<VkDeviceSize>(window_ref.get_settings().width *
-                                                            window_ref.get_settings().height * 4),
+                                  static_cast<VkDeviceSize>((window_ref.get_settings().width *
+                                                            window_ref.get_settings().height * 4) / resolution_scale),
                                   VK::MemoryUsage::gpu);
     auto random_buffer =
         VK::Buffer(vk_device, memory_allocator, "random_data_uniform_" + std::to_string(index),
@@ -1028,8 +1028,8 @@ void RVPT::record_compute_command_buffer()
         cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, rendering_resources->raytrace_pipeline_layout, 0,
         1, &per_frame_data[current_frame_index].raytracing_descriptor_sets.set, 0, 0);
 
-    vkCmdDispatch(cmd_buf, per_frame_data[current_frame_index].output_image.width / 16,
-                  per_frame_data[current_frame_index].output_image.height / 16, 1);
+    vkCmdDispatch(cmd_buf, glm::ceil(per_frame_data[current_frame_index].output_image.width / 16.f),
+                  glm::ceil(per_frame_data[current_frame_index].output_image.height / 16.f), 1);
 
     command_buffer.end();
 }
