@@ -31,8 +31,8 @@ Bvh BinnedBvhBuilder::build_bvh(const std::vector<glm::vec3>& primitive_centers,
     std::iota(bvh.primitive_indices.begin(), bvh.primitive_indices.end(), 0);
 
     // Initially, we set the root node to be a leaf that spans the entire list of primitives
-    bvh.nodes.emplace_back(BvhNode{.first_child_or_primitive = 0,
-                                   .primitive_count = static_cast<uint32_t>(primitive_count)});
+    bvh.nodes.emplace_back(BvhNode{0, static_cast<uint32_t>(primitive_count)});
+
     build_bvh_node(bvh, bvh.nodes.front(), primitive_centers, bounding_boxes);
     bvh.nodes.shrink_to_fit();
     return bvh;
