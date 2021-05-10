@@ -96,13 +96,13 @@ int main()
 
 
     Window::Settings settings;
-    settings.width = 1024;
-    settings.height = 512;
+    settings.width = 3330;
+    settings.height = 1340;
     Window window(settings);
 
     RVPT rvpt(window);
 
-    load_model(rvpt, "models/rabbit.obj", 1);
+    load_model(rvpt, "models/tridel-interior-test.obj", 1);
 
     // Setup Demo Scene
     rvpt.add_material(

@@ -43,7 +43,7 @@ public:
 
 private:
     // Threshold below which nodes are no longer split
-    static constexpr size_t min_primitives_per_leaf = 2;
+    static constexpr size_t min_primitives_per_leaf = 4;
     // Threshold above which nodes that are not split with binning are still split with the fallback strategy.
     static constexpr size_t max_primitives_per_leaf = 8;
     // Number of bins used to approximate the SAH. Higher = More accuracy, but slower.

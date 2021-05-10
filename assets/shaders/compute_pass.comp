@@ -126,38 +126,42 @@ void main()
 		5: Kajiya
 		
 	*/
-    int integrator_idx = render_settings.top_left_render_mode;
-    vec2 pixel_split = vec2(gl_GlobalInvocationID) / dim;
-    if (pixel_split.y > render_settings.split_ratio.y)
+
+    if (gl_GlobalInvocationID.y < dim.y && gl_GlobalInvocationID.x < dim.x)
     {
-        if (pixel_split.x < render_settings.split_ratio.x)
-            integrator_idx = render_settings.bottom_left_render_mode;
-        else
-            integrator_idx = render_settings.bottom_right_render_mode;
+        int integrator_idx = render_settings.top_left_render_mode;
+        vec2 pixel_split = vec2(gl_GlobalInvocationID) / dim;
+        if (pixel_split.y > render_settings.split_ratio.y)
+        {
+            if (pixel_split.x < render_settings.split_ratio.x)
+                integrator_idx = render_settings.bottom_left_render_mode;
+            else
+                integrator_idx = render_settings.bottom_right_render_mode;
+        }
+        else if (pixel_split.x > render_settings.split_ratio.x)
+            integrator_idx = render_settings.top_right_render_mode;
+
+        vec3 temporal_accumulation_sample =
+            (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
+            min(render_settings.current_frame, 1);
+
+        vec3 sampled = vec3(0);
+        for (int i = 0; i < render_settings.aa; i++)
+        {
+            vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
+            coord.y = 1.0-coord.y; /* flip image vertically */
+
+            Ray ray = get_camera_ray(render_settings.camera_mode, coord.x, coord.y);
+            sampled += eval_integrator(integrator_idx, ray);
+        }
+
+        float current_frame = float(render_settings.current_frame);
+
+        sampled /= render_settings.aa;
+        sampled = temporal_accumulation_sample * current_frame / (current_frame + 1) +
+                  sampled / (current_frame + 1);
+
+        imageStore(temporal_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
+        imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
     }
-    else if (pixel_split.x > render_settings.split_ratio.x)
-        integrator_idx = render_settings.top_right_render_mode;
-
-    vec3 temporal_accumulation_sample =
-        (imageLoad(temporal_image, ivec2(gl_GlobalInvocationID.xy))).xyz *
-        min(render_settings.current_frame, 1);
-
-    vec3 sampled = vec3(0);
-    for (int i = 0; i < render_settings.aa; i++)
-    {
-        vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
-		coord.y = 1.0-coord.y; /* flip image vertically */
-        
-		Ray ray = get_camera_ray(render_settings.camera_mode, coord.x, coord.y);
-		sampled += eval_integrator(integrator_idx, ray);
-	}
-
-    float current_frame = float(render_settings.current_frame);
-
-    sampled /= render_settings.aa;
-    sampled = temporal_accumulation_sample * current_frame / (current_frame + 1) +
-              sampled / (current_frame + 1);
-
-    imageStore(temporal_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
-    imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
 }

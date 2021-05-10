@@ -4,6 +4,7 @@
 #include <vector>
 #include <optional>
 #include <random>
+#include <atomic>
 
 #include <vulkan/vulkan.h>
 
@@ -85,7 +86,6 @@ public:
         int bottom_left_render_mode = 9;
         int bottom_right_render_mode = 9;
         glm::vec2 split_ratio = glm::vec2(0.5, 0.5);
-
     } render_settings;
 
 private:
@@ -99,6 +99,9 @@ private:
     bool debug_wireframe_mode = false;
 
     bool debug_bvh_enabled = false;
+
+    // Currently hardcoded, should be able to change in the future.
+    float resolution_scale = 3.0f;
 
     Window& window_ref;
     std::string source_folder = "";
