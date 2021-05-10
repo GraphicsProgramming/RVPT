@@ -44,7 +44,19 @@ RVPT::RVPT(Window& window)
         source_folder = json["project_source_dir"];
     }
 
-    random_numbers.resize(20480);
+	std::ifstream sobol("../assets/sobol.txt");
+
+    if (!sobol.good())
+        fmt::print(stderr, "Failed to load sobol.txt\n");
+
+	uint32_t num;
+	while((sobol>>num))
+	{
+		random_numbers.push_back(num);
+		char space;
+		sobol >> space;
+	}
+    //random_numbers.resize(20480);
 }
 
 RVPT::~RVPT() {}
@@ -106,7 +118,7 @@ bool RVPT::update()
         render_settings.current_frame++;
     }
 
-    for (auto& r : random_numbers) r = (distribution(random_generator));
+    //for (auto& r : random_numbers) r = (distribution(random_generator));
 
     per_frame_data[current_frame_index].raytrace_work_fence.wait();
     per_frame_data[current_frame_index].raytrace_work_fence.reset();

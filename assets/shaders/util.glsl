@@ -33,7 +33,9 @@ uint wang_hash(uint seed)
 }
 
 uint p_idx = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_size.x;
-uint rng_state = wang_hash(p_idx)+iframe;
+uint rng_state = wang_hash(p_idx);//+iframe; //wang_hash(p_idx)+iframe;
+int sobol_sample_dim = 0;
+int sobol_sample_idx = 0;
 
 uint rand_xorshift()
 {
@@ -44,9 +46,33 @@ uint rand_xorshift()
     return rng_state;
 }
 
-float rand()
+// sequence from: https://eheitzresearch.wordpress.com/762-2/
+float sample_sobol()
+{
+	// wrap arguments
+	sobol_sample_idx = sobol_sample_idx & 255;
+	sobol_sample_dim = sobol_sample_dim & 255;
+
+	// fetch value in sequence
+	uint value = random_source[sobol_sample_dim + sobol_sample_idx*256];
+	++sobol_sample_dim;
+
+	// If the dimension is optimized, xor sequence value based on optimized scrambling
+	value = value ^ (rand_xorshift()%256);
+
+	// convert to float and return
+	float v = (0.5+value)/256.0;
+	return v;
+}
+
+float rand_old()
 {
     return rand_xorshift() / 4294967296.0;
+}
+
+float rand()
+{
+	return sample_sobol();
 }
     
 /*--------------------------------------------------------------------------*/

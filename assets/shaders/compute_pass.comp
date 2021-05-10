@@ -38,7 +38,7 @@ layout(binding = 0) uniform RenderSettings
 render_settings;
 layout(binding = 1, rgba8) uniform writeonly image2D result_image;
 layout(binding = 2, rgba8) uniform image2D temporal_image;
-layout(binding = 3) buffer Random { float random_source[]; };
+layout(binding = 3) buffer Random { uint random_source[]; };
 layout(binding = 4) uniform Camera
 {
     mat4 matrix;
@@ -143,6 +143,12 @@ void main()
         min(render_settings.current_frame, 1);
 
     vec3 sampled = vec3(0);
+	
+	// init rng properly 
+	sobol_sample_idx = int(render_settings.current_frame * render_settings.aa)&255;
+	p_idx = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_size.x;
+	rng_state = wang_hash(p_idx) + sobol_sample_idx;
+	
     for (int i = 0; i < render_settings.aa; i++)
     {
         vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
@@ -150,6 +156,7 @@ void main()
         
 		Ray ray = get_camera_ray(render_settings.camera_mode, coord.x, coord.y);
 		sampled += eval_integrator(integrator_idx, ray);
+		++sobol_sample_idx;
 	}
 
     float current_frame = float(render_settings.current_frame);

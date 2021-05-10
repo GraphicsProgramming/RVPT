@@ -108,7 +108,7 @@ private:
     std::uniform_real_distribution<float> distribution;
 
     // Random numbers (generated every frame)
-    std::vector<float> random_numbers;
+    std::vector<uint32_t> random_numbers;
 
     // BVH AABB's
     BinnedBvhBuilder bvh_builder;
