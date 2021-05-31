@@ -110,11 +110,11 @@ auto create_font_texture(VkDevice device, VK::MemoryAllocator& memory_allocator,
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     size_t upload_size = width * height * 4 * sizeof(char);
 
-    VK::Image font_image(device, memory_allocator, graphics_queue, "imgui_font_image",
-                         VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, width, height,
-                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT,
-                         upload_size, VK::MemoryUsage::gpu);
+    VK::Image font_image(
+        device, memory_allocator, graphics_queue, "imgui_font_image", VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_TILING_OPTIMAL, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)},
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, VK::MemoryUsage::gpu);
 
     VK::Buffer upload_buffer(device, memory_allocator, "imgui_font_upload_buffer",
                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT, upload_size,
@@ -179,8 +179,7 @@ auto create_descriptor_pool(VkDevice device, VkSampler font_sampler)
     return VK::DescriptorPool{device, bindings, 1, "imgui_descriptor_pool"};
 }
 
-auto create_pipeline_layout(VkDevice device, VK::PipelineBuilder& pipeline_builder,
-                            VkDescriptorSetLayout layout)
+auto create_pipeline_layout(VK::PipelineBuilder& pipeline_builder, VkDescriptorSetLayout layout)
 {
     std::vector<VkDescriptorSetLayout> layouts = {layout};
     std::vector<VkPushConstantRange> push_constants = {
@@ -188,7 +187,7 @@ auto create_pipeline_layout(VkDevice device, VK::PipelineBuilder& pipeline_build
     return pipeline_builder.create_layout(layouts, push_constants, "imgui_pipeline_layout");
 }
 
-auto create_vert_shader(VkDevice device)
+auto create_vert_shader()
 {
     std::vector<uint32_t> vert_code;
     vert_code.resize(324);  // length of glsl_shader_vert_spv
@@ -197,20 +196,20 @@ auto create_vert_shader(VkDevice device)
     return vert_code;
 }
 
-auto create_frag_shader(VkDevice device)
+auto create_frag_shader()
 {
     std::vector<uint32_t> frag_code;
     frag_code.resize(193);  // length of glsl_shader_frag_spv
     for (int i = 0; i < 193; i++) frag_code[i] = glsl_shader_frag_spv[i];
 
-    return device, frag_code;
+    return frag_code;
 }
 
 auto create_pipeline(VkDevice device, VK::PipelineBuilder& pipeline_builder,
                      VkPipelineLayout layout, VkRenderPass render_pass, VkExtent2D extent)
 {
-    auto vert = create_vert_shader(device);
-    auto frag = create_frag_shader(device);
+    auto vert = create_vert_shader();
+    auto frag = create_frag_shader();
 
     std::vector<VkVertexInputBindingDescription> binding_desc = {
         {0, sizeof(ImDrawVert), VK_VERTEX_INPUT_RATE_VERTEX}};
@@ -244,7 +243,7 @@ ImguiImpl::ImguiImpl(VkDevice device, VK::Queue& graphics_queue,
       font_image(create_font_texture(device, memory_allocator, graphics_queue)),
       pool(create_descriptor_pool(device, font_image.sampler.handle)),
       descriptor_set(pool.allocate("imgui_descriptor_set")),
-      pipeline_layout(create_pipeline_layout(device, pipeline_builder, pool.layout())),
+      pipeline_layout(create_pipeline_layout(pipeline_builder, pool.layout())),
       pipeline(create_pipeline(device, pipeline_builder, pipeline_layout, render_pass, extent))
 {
     for (uint32_t i = 0; i < max_frames_in_flight; i++)

@@ -2,7 +2,7 @@
 // Created by legend on 21/8/2020.
 //
 
-#include "bvh_builder.h"
+#include "rvpt/bvh_builder.h"
 
 #include <numeric>
 #include <algorithm>
@@ -41,8 +41,8 @@ Bvh BinnedBvhBuilder::build_bvh(const std::vector<glm::vec3>& primitive_centers,
 size_t BinnedBvhBuilder::compute_bin_index(int axis, const glm::vec3& center,
                                            const AABB& aabb) noexcept
 {
-    int index =
-        (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]);
+    int index = static_cast<int>((center[axis] - aabb.min[axis]) *
+                                 (static_cast<float>(bin_count) / aabb.diagonal()[axis]));
     return std::min(int{bin_count - 1}, std::max(0, index));
 }
 
@@ -175,12 +175,12 @@ void BinnedBvhBuilder::build_bvh_node(Bvh& bvh, BvhNode& node_to_build,
     auto& left_child = bvh.nodes.emplace_back();
     auto& right_child = bvh.nodes.emplace_back();
     node_to_build.primitive_count = 0;
-    node_to_build.first_child_or_primitive = first_child_index;
+    node_to_build.first_child_or_primitive = static_cast<uint32_t>(first_child_index);
 
-    left_child.primitive_count = right_partition_begin - primitives_begin;
-    left_child.first_child_or_primitive = primitives_begin;
-    right_child.primitive_count = primitives_end - right_partition_begin;
-    right_child.first_child_or_primitive = right_partition_begin;
+    left_child.primitive_count = static_cast<uint32_t>(right_partition_begin - primitives_begin);
+    left_child.first_child_or_primitive = static_cast<uint32_t>(primitives_begin);
+    right_child.primitive_count = static_cast<uint32_t>(primitives_end - right_partition_begin);
+    right_child.first_child_or_primitive = static_cast<uint32_t>(right_partition_begin);
 
     build_bvh_node(bvh, left_child, primitive_centers, bounding_boxes);
     build_bvh_node(bvh, right_child, primitive_centers, bounding_boxes);

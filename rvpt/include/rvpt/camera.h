@@ -7,7 +7,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 
-static const char* CameraModes[] = {"perspective", "orthographic", "spherical"};
+static const char *CameraModes[] = {"perspective", "orthographic", "spherical"};
 
 class Camera
 {
@@ -39,7 +39,7 @@ public:
     [[nodiscard]] glm::mat4 get_view_matrix();
     [[nodiscard]] glm::mat4 get_pv_matrix();
 
-private:
+    // private:
     void _update_values();
     int mode = 0;
     float fov = 90.f, scale = 4.f, aspect{};

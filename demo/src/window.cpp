@@ -136,7 +136,7 @@ bool Window::is_key_held(Window::KeyCode keycode) const noexcept
            key_states[static_cast<int>(keycode)] == KeyState::repeat;
 }
 
-void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void Window::key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods)
 {
     auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_RELEASE)
@@ -162,12 +162,12 @@ void Window::key_callback(GLFWwindow* window, int key, int scancode, int action,
 }
 void Window::char_callback(GLFWwindow* window, uint32_t codepoint)
 {
-    auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+    [[maybe_unused]] auto window_ptr = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
     ImGuiIO& io = ImGui::GetIO();
     io.AddInputCharacter(codepoint);
 }
 
-void Window::mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
+void Window::mouse_click_callback(GLFWwindow* window, int button, int action, [[maybe_unused]] int mods)
 {
     Action callback_action;
     switch (action)

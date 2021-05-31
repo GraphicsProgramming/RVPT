@@ -348,9 +348,9 @@ void DescriptorSet::update(std::vector<DescriptorUse> descriptors) const
     vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
 void DescriptorSet::bind(VkCommandBuffer cmdBuf, VkPipelineBindPoint bind_point,
-                         VkPipelineLayout layout, uint32_t location) const
+                         VkPipelineLayout _layout, uint32_t location) const
 {
-    vkCmdBindDescriptorSets(cmdBuf, bind_point, layout, location, 1, &set, 0, nullptr);
+    vkCmdBindDescriptorSets(cmdBuf, bind_point, _layout, location, 1, &set, 0, nullptr);
 }
 
 // DescriptorPool
@@ -416,8 +416,7 @@ DescriptorSet DescriptorPool::allocate(std::string const& name)
     alloc_info.descriptorSetCount = 1;
     alloc_info.pSetLayouts = &vk_layout.handle;
 
-    VkResult res = vkAllocateDescriptorSets(pool.device, &alloc_info, &set);
-    assert(res == VK_SUCCESS);
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(pool.device, &alloc_info, &set));
 
     return DescriptorSet{pool.device, set, vk_layout.handle, name};
 }
@@ -451,18 +450,18 @@ void DescriptorPool::update_descriptor_sets(DescriptorSet const& set,
 
 // Render Pass
 
-VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
-                                VkFormat depth_image_format, std::string const& name)
+VkRenderPass create_intermediate_render_pass(VkDevice device, VkFormat color_image_format,
+                                             VkFormat depth_image_format, std::string const& name)
 {
     VkAttachmentDescription color_attachment{};
-    color_attachment.format = swapchain_image_format;
+    color_attachment.format = color_image_format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription depth_attachment{};
     depth_attachment.format = depth_image_format;
@@ -485,6 +484,53 @@ VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &attach_refs[0];
     subpass.pDepthStencilAttachment = &attach_refs[1];
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo render_pass_info{};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_info.attachmentCount = static_cast<uint32_t>(attach_desc.size());
+    render_pass_info.pAttachments = attach_desc.data();
+    render_pass_info.subpassCount = 1;
+    render_pass_info.pSubpasses = &subpass;
+    render_pass_info.dependencyCount = 1;
+    render_pass_info.pDependencies = &dependency;
+
+    VkRenderPass render_pass;
+
+    VK_CHECK_RESULT(vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
+    debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_RENDER_PASS, render_pass, name);
+    return render_pass;
+}
+
+VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
+                                std::string const& name)
+{
+    VkAttachmentDescription color_attachment{};
+    color_attachment.format = swapchain_image_format;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    std::array<VkAttachmentDescription, 1> attach_desc{color_attachment};
+
+    std::array<VkAttachmentReference, 1> attach_refs{
+        VkAttachmentReference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}};  // depth
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &attach_refs[0];
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -816,9 +862,9 @@ std::vector<uint32_t> PipelineBuilder::load_spirv(std::string const& filename) c
 {
     std::string shader_path;
     if (source_folder != "")
-        shader_path = source_folder + "/assets/shaders/" + filename;
+        shader_path = source_folder + "/" + filename;
     else
-        shader_path = "assets/shaders/" + filename;
+        shader_path = filename;
 #ifdef WIN32
     std::string win_path;
     for (auto& c : shader_path)
@@ -861,7 +907,7 @@ void MemoryAllocator::shutdown()
 }
 
 MemoryAllocator::Allocation<VkImage, MemoryCategory::Image> MemoryAllocator::allocate_image(
-    VkImage image, VkDeviceSize size, MemoryUsage usage, MemoryCategory::Image category)
+    VkImage image, MemoryUsage usage, [[maybe_unused]] MemoryCategory::Image category)
 {
     VkMemoryRequirements memory_requirements;
     vkGetImageMemoryRequirements(device, image, &memory_requirements);
@@ -879,7 +925,7 @@ MemoryAllocator::Allocation<VkImage, MemoryCategory::Image> MemoryAllocator::all
 }
 
 MemoryAllocator::Allocation<VkBuffer, MemoryCategory::Buffer> MemoryAllocator::allocate_buffer(
-    VkBuffer buffer, VkDeviceSize size, MemoryUsage usage, MemoryCategory::Buffer category)
+    VkBuffer buffer, MemoryUsage usage, [[maybe_unused]] MemoryCategory::Buffer category)
 {
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, buffer, &memory_requirements);
@@ -897,7 +943,7 @@ MemoryAllocator::Allocation<VkBuffer, MemoryCategory::Buffer> MemoryAllocator::a
     return Allocation(this, buffer, MemoryCategory::Buffer{});
 }
 
-void MemoryAllocator::free(VkImage image, MemoryCategory::Image category_tag)
+void MemoryAllocator::free(VkImage image, [[maybe_unused]] MemoryCategory::Image category_tag)
 {
     auto it = std::find_if(std::begin(image_allocations), std::end(image_allocations),
                            [&](auto const& elem) { return elem.first == image; });
@@ -906,7 +952,7 @@ void MemoryAllocator::free(VkImage image, MemoryCategory::Image category_tag)
         image_allocations.erase(it);
     }
 }
-void MemoryAllocator::free(VkBuffer buffer, MemoryCategory::Buffer category_tag)
+void MemoryAllocator::free(VkBuffer buffer, [[maybe_unused]] MemoryCategory::Buffer category_tag)
 {
     auto it = std::find_if(std::begin(buffer_allocations), std::end(buffer_allocations),
                            [&](auto const& elem) { return elem.first == buffer; });
@@ -1004,13 +1050,13 @@ MemoryAllocator::Pool::Pool(VkDevice device, VkDeviceMemory device_memory, VkDev
 
 // Image
 
-auto create_image(VkDevice device, VkFormat format, VkImageTiling image_tiling, VkExtent3D extent,
+auto create_image(VkDevice device, VkFormat format, VkImageTiling image_tiling, VkExtent2D _extent,
                   VkImageUsageFlags usage)
 {
     VkImageCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     create_info.imageType = VK_IMAGE_TYPE_2D;
-    create_info.extent = extent;
+    create_info.extent = {_extent.width, _extent.height, 1};
     create_info.mipLevels = 1;
     create_info.arrayLayers = 1;
     create_info.format = format;
@@ -1066,18 +1112,16 @@ auto create_sampler(VkDevice device)
 }
 
 Image::Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
-             VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
-             VkImageUsageFlags usage, VkImageLayout layout, VkImageAspectFlags aspects,
-             VkDeviceSize size, MemoryUsage memory_usage)
+             VkFormat format, VkImageTiling tiling, VkExtent2D extent, VkImageUsageFlags usage,
+             VkImageLayout layout, VkImageAspectFlags aspects, MemoryUsage memory_usage)
     : memory_ptr(&memory),
-      image(create_image(device, format, tiling, {width, height, 1}, usage)),
-      image_allocation(memory.allocate_image(image.handle, size, memory_usage)),
+      image(create_image(device, format, tiling, extent, usage)),
+      image_allocation(memory.allocate_image(image.handle, memory_usage)),
       image_view(create_image_view(device, image.handle, format, aspects)),
       sampler(create_sampler(device)),
       format(format),
       layout(layout),
-      width(width),
-      height(height)
+      extent(extent)
 {
     // no need to change layout
     if (layout == VK_IMAGE_LAYOUT_UNDEFINED) return;
@@ -1122,7 +1166,7 @@ Buffer::Buffer(VkDevice device, MemoryAllocator& memory, std::string const& name
                VkBufferUsageFlags usage, VkDeviceSize size, MemoryUsage memory_usage)
     : memory_ptr(&memory),
       buffer(create_buffer(device, size, usage)),
-      buffer_allocation(memory.allocate_buffer(buffer.handle, size, memory_usage)),
+      buffer_allocation(memory.allocate_buffer(buffer.handle, memory_usage)),
       buf_size(size)
 {
     debug_utils_helper.set_debug_object_name(VK_OBJECT_TYPE_BUFFER, buffer.handle, name);

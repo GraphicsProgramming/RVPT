@@ -15,6 +15,7 @@
 #include <fmt/core.h>
 
 const char* error_str(const VkResult result);
+#if !defined(NDEBUG)
 #define VK_CHECK_RESULT(f)                                                                  \
     {                                                                                       \
         VkResult res = (f);                                                                 \
@@ -25,6 +26,11 @@ const char* error_str(const VkResult result);
             assert(res > VK_SUCCESS); /*only crash on negative results */                   \
         }                                                                                   \
     }
+#else
+#define VK_CHECK_RESULT(f) (f);
+#endif
+
+const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 namespace VK
 {
@@ -275,9 +281,10 @@ private:
     uint32_t max_sets = 0;
     uint32_t current_sets = 0;
 };
-
+VkRenderPass create_intermediate_render_pass(VkDevice device, VkFormat color_image_format,
+                                             VkFormat depth_image_format, std::string const& name);
 VkRenderPass create_render_pass(VkDevice device, VkFormat swapchain_image_format,
-                                VkFormat depth_image_format, std::string const& name);
+                                std::string const& name);
 void destroy_render_pass(VkDevice device, VkRenderPass render_pass);
 struct Framebuffer
 {
@@ -315,7 +322,7 @@ struct GraphicsPipelineDetails
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
     bool enable_blending = false;
     VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
-    VkPrimitiveTopology  primitive_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPrimitiveTopology primitive_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     float line_width = 1.0f;
     VkCullModeFlags cull_mode = VK_CULL_MODE_FRONT_BIT;
     VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -437,11 +444,9 @@ public:
     };
 
     Allocation<VkImage, MemoryCategory::Image> allocate_image(
-        VkImage image, VkDeviceSize size, MemoryUsage usage,
-        MemoryCategory::Image category_tag = {});
+        VkImage image, MemoryUsage usage, MemoryCategory::Image category_tag = {});
     Allocation<VkBuffer, MemoryCategory::Buffer> allocate_buffer(
-        VkBuffer buffer, VkDeviceSize size, MemoryUsage usage,
-        MemoryCategory::Buffer category_tag = {});
+        VkBuffer buffer, MemoryUsage usage, MemoryCategory::Buffer category_tag = {});
 
     void free(VkImage image, MemoryCategory::Image category_tag = {});
     void free(VkBuffer buffer, MemoryCategory::Buffer category_tag = {});
@@ -492,9 +497,9 @@ class Image
 {
 public:
     explicit Image(VkDevice device, MemoryAllocator& memory, Queue& queue, std::string const& name,
-                   VkFormat format, VkImageTiling tiling, uint32_t width, uint32_t height,
+                   VkFormat format, VkImageTiling tiling, VkExtent2D extent,
                    VkImageUsageFlags usage, VkImageLayout layout, VkImageAspectFlags aspects,
-                   VkDeviceSize size, MemoryUsage memory_usage);
+                   MemoryUsage memory_usage);
 
     VkImage get() const { return image.handle; }
     VkDescriptorImageInfo descriptor_info() const;
@@ -507,8 +512,7 @@ public:
 
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    uint32_t width;
-    uint32_t height;
+    VkExtent2D extent;
 };
 
 class Buffer

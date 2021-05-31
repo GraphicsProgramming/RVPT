@@ -2,14 +2,13 @@
 // Created by legend on 20/8/2020.
 //
 
-#include "bvh.h"
+#include "rvpt/bvh.h"
 
-void Bvh::collect_aabbs_by_depth(
-    std::vector<std::vector<AABB>>& aabbs,
-    size_t depth, size_t node_index) const
+void Bvh::collect_aabbs_by_depth(std::vector<std::vector<AABB>>& aabbs, size_t depth,
+                                 size_t node_index) const
 {
     // Get the current node at the depth we're exploring
-    const auto &node = nodes[node_index];
+    const auto& node = nodes[node_index];
 
     // Reserve the stored AABB's (Helps save memory allocation cost)
     if (depth >= aabbs.size()) aabbs.resize(depth + 1);

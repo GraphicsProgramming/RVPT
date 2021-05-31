@@ -7,22 +7,16 @@
 
 #include <vulkan/vulkan.h>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
 #include <VkBootstrap.h>
 
-#include "window.h"
-#include "imgui_impl.h"
 #include "vk_util.h"
-#include "camera.h"
 #include "timer.h"
+
+#include "camera.h"
 #include "geometry.h"
 #include "material.h"
 #include "bvh.h"
 #include "bvh_builder.h"
-
-const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 static const char* RenderModes[] = {"binary",       "color",          "depth",
                                     "normals",      "Utah model",     "ambient occlusion",
@@ -30,32 +24,27 @@ static const char* RenderModes[] = {"binary",       "color",          "depth",
                                     "James Kajiya", "John Hart"};
 
 const std::vector<glm::vec3> colors = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0, 0, 0},   {1, .5, 0},
-                      {1, 0, 1}, {1, 1, 0}, {1, 1, 1}, {.5, .25, 0}};
+                                       {1, 0, 1}, {1, 1, 0}, {1, 1, 1}, {.5, .25, 0}};
 
 class RVPT
 {
 public:
-    explicit RVPT(Window& window);
-    ~RVPT();
+    explicit RVPT(float aspect_ratio) noexcept;
+    ~RVPT() noexcept;
 
     RVPT(RVPT const& other) = delete;
     RVPT operator=(RVPT const& other) = delete;
-    RVPT(RVPT&& other) = delete;
-    RVPT operator=(RVPT&& other) = delete;
+    RVPT(RVPT&& other) noexcept;
+    RVPT operator=(RVPT&& other) noexcept;
 
     // Create a Vulkan context and do all the one time initialization
-    bool initialize();
+    bool initialize(VkPhysicalDevice physical_device, VkDevice device,
+                    uint32_t graphics_queue_index, uint32_t compute_queue_index, VkExtent2D extent);
 
-    bool update();
+    void update();
 
-    enum class draw_return
-    {
-        success,
-        swapchain_out_of_date
-    };
-
-    void update_imgui();
-    draw_return draw();
+    void draw();
+    VkImage get_image();
 
     void shutdown();
 
@@ -68,8 +57,6 @@ public:
 
     void add_material(Material material);
     void add_triangle(Triangle triangle);
-
-    void get_asset_path(std::string& asset_path);
 
     Camera scene_camera;
     Timer time;
@@ -88,11 +75,10 @@ public:
 
     } render_settings;
 
-private:
-    bool show_imgui = true;
-
-    // from a callback
-    bool framebuffer_resized = false;
+    // private:
+    VkExtent2D extent;
+    uint32_t width = 0;
+    uint32_t height = 0;
 
     // enable debug overlay
     bool debug_overlay_enabled = false;
@@ -100,7 +86,6 @@ private:
 
     bool debug_bvh_enabled = false;
 
-    Window& window_ref;
     std::string source_folder = "";
 
     // Random number generators
@@ -132,37 +117,18 @@ private:
         bool operator==(RVPT::PreviousFrameState const& right);
     } previous_frame_state;
 
-    struct Context
-    {
-        VkSurfaceKHR surf{};
-        vkb::Instance inst{};
-        vkb::Device device{};
-    } context;
-    VkDevice vk_device{};
+    VkPhysicalDevice physical_device;
+    VkDevice device{};
 
     // safe to assume its always available
     std::optional<VK::Queue> graphics_queue;
-    std::optional<VK::Queue> present_queue;
-
     // not safe to assume, not all hardware has a dedicated compute queue
     std::optional<VK::Queue> compute_queue;
 
     VK::PipelineBuilder pipeline_builder;
     VK::MemoryAllocator memory_allocator;
 
-    vkb::Swapchain vkb_swapchain;
-    std::vector<VkImage> swapchain_images;
-    std::vector<VkImageView> swapchain_image_views;
-
-    uint32_t current_sync_index = 0;
-    std::vector<VK::SyncResources> sync_resources;
-    std::vector<VkFence> frames_inflight_fences;
-
     VkRenderPass fullscreen_tri_render_pass;
-
-    std::optional<ImguiImpl> imgui_impl;
-
-    std::vector<VK::Framebuffer> framebuffers;
 
     struct RenderingResources
     {
@@ -211,19 +177,14 @@ private:
         VK::Buffer debug_bvh_camera_uniform;
         VK::Buffer debug_bvh_vertex_buffer;
         VK::DescriptorSet debug_bvh_descriptor_set;
+
+        VK::Framebuffer framebuffer;
     };
     std::vector<PerFrameData> per_frame_data;
 
-    // helper functions
-    [[nodiscard]] bool context_init();
-    [[nodiscard]] bool swapchain_init();
-    [[nodiscard]] bool swapchain_reinit();
-    [[nodiscard]] bool swapchain_get_images();
-    void create_framebuffers();
-
-    [[nodiscard]] RenderingResources create_rendering_resources();
+    RVPT::RenderingResources create_rendering_resources();
     void add_per_frame_data(int index);
 
-    void record_command_buffer(VK::SyncResources& current_frame, uint32_t swapchain_image_index);
+    void record_graphics_command_buffer(VK::SyncResources& current_frame);
     void record_compute_command_buffer();
 };

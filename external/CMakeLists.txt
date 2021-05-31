@@ -50,3 +50,5 @@ if(NOT imgui_POPULATED)
 
 endif()
 
+add_library(rvpt_external_header_dependencies INTERFACE)
+target_include_directories(rvpt_external_header_dependencies INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)

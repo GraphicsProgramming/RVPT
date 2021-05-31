@@ -9,9 +9,9 @@ inline void dropdown_helper(const char* unique_identifier, int& cur_mode,
                             const char* (&mode_names)[count])
 {
     ImGuiStyle& style = ImGui::GetStyle();
-    float w = ImGui::CalcItemWidth();
-    float spacing = style.ItemInnerSpacing.x;
-    float button_sz = ImGui::GetFrameHeight();
+    // float w = ImGui::CalcItemWidth();
+    // float spacing = style.ItemInnerSpacing.x;
+    // float button_sz = ImGui::GetFrameHeight();
 
     std::string left_arrow_name = std::string("##") + unique_identifier + "_l_arrow";
     if (ImGui::ArrowButton(left_arrow_name.c_str(), ImGuiDir_Left))

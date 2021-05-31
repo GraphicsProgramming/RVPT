@@ -1,14 +1,11 @@
 //
 // Created by legend on 5/26/20.
 //
-#include "camera.h"
+#include "rvpt/camera.h"
 
 #define GLM_DEPTH_ZERO_TO_ONE
 #include <glm/ext.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <imgui.h>
-
-#include "imgui_helpers.h"
 
 constexpr glm::vec3 RIGHT = glm::vec3(1, 0, 0);
 constexpr glm::vec3 UP = glm::vec3(0, 1, 0);
@@ -81,52 +78,6 @@ glm::mat4 Camera::get_pv_matrix()
 {
     _update_values();
     return pv_matrix;
-}
-
-void Camera::update_imgui()
-{
-    static bool is_active = true;
-    ImGui::SetNextWindowPos({0, 265}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({200, 210}, ImGuiCond_Once);
-
-    if (ImGui::Begin("Camera Data", &is_active))
-    {
-        ImGui::PushItemWidth(125);
-        ImGui::DragFloat3("position", glm::value_ptr(translation), 0.2f);
-        ImGui::DragFloat3("rotation", glm::value_ptr(rotation), 0.2f);
-        ImGui::Text("Reset");
-        ImGui::SameLine();
-        if (ImGui::Button("Pos")) translation = {};
-
-        ImGui::SameLine();
-        if (ImGui::Button("Rot")) rotation = {};
-
-        ImGui::Text("Projection");
-        dropdown_helper("camera_mode", mode, CameraModes);
-        if (mode == 0)
-        {
-            ImGui::SliderFloat("fov", &fov, 1, 179);
-        }
-        else if (mode == 1)
-        {
-            ImGui::SliderFloat("scale", &scale, 0.1, 20);
-        }
-
-        ImGui::Checkbox("Clamp Vertical Rot", &vertical_view_angle_clamp);
-
-        static bool show_view_matrix = false;
-        ImGui::Checkbox("Show View Matrix", &show_view_matrix);
-        if (show_view_matrix)
-        {
-            ImGui::PushItemWidth(170);
-            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[0]), 0.05f);
-            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[1]), 0.05f);
-            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[2]), 0.05f);
-            ImGui::DragFloat4("", glm::value_ptr(camera_matrix[3]), 0.05f);
-        }
-    }
-    ImGui::End();
-    _update_values();
 }
 
 void Camera::_update_values()

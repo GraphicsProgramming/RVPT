@@ -1,0 +1,3 @@
+#pragma once
+
+#define RVPT_ASSET_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets"
