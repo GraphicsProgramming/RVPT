@@ -37,7 +37,7 @@ struct AABB
     [[nodiscard]]
     float half_area() const {
         auto d = glm::max(diagonal(), glm::vec3(0));
-        return d.x * d.y + d.x * d.z + d.y * d.z;
+        return d.x * (d.y + d.z) + d.y * d.z;
     }
 
     AABB& expand(const glm::vec3& vec)

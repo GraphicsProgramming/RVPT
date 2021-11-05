@@ -66,6 +66,9 @@ private:
     [[nodiscard]] static size_t compute_bin_index(
         int axis, const glm::vec3& center, const AABB& centers_aabb) noexcept;
 
+    [[nodiscard]] static size_t compute_bin_index_precalc(
+        int axis, const glm::vec3& center, const AABB& centers_aabb, const float precalc) noexcept;
+
     struct BestSplit
     {
         float min_cost;
