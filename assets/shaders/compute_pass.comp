@@ -3,6 +3,8 @@
 #extension GL_EXT_scalar_block_layout : require
 
 #define PI 3.1415926535897932384626433832795
+#define TWO_PI 6.283185307179586476925286766559
+#define INV_PI 0.31830988618379067153776752674503
 #define RAY_MIN_DIST 0.01
 #define EPSILON 0.005
 #define MARCH_ITER 32
@@ -46,7 +48,10 @@ layout(binding = 4) uniform Camera
 }
 cam;
 ivec2 dim = imageSize(result_image);
+vec2 inv_dim = 1.0f / vec2(dim);
 uint iframe = render_settings.current_frame;
+float current_frame = float(render_settings.current_frame);
+float inv_current_frame = 1.0f / float(render_settings.current_frame + 1);
 
 layout(std430, binding = 5) buffer BvhNodes { BvhNode bvh_nodes[]; };
 layout(std430, binding = 6) buffer Triangles { Triangle triangles[]; };
@@ -127,7 +132,7 @@ void main()
 		
 	*/
     int integrator_idx = render_settings.top_left_render_mode;
-    vec2 pixel_split = vec2(gl_GlobalInvocationID) / dim;
+    vec2 pixel_split = vec2(gl_GlobalInvocationID) * inv_dim;
     if (pixel_split.y > render_settings.split_ratio.y)
     {
         if (pixel_split.x < render_settings.split_ratio.x)
@@ -145,18 +150,17 @@ void main()
     vec3 sampled = vec3(0);
     for (int i = 0; i < render_settings.aa; i++)
     {
-        vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) / dim;
+        vec2 coord = (vec2(gl_GlobalInvocationID.xy) + vec2(rand(), rand())) * inv_dim;
 		coord.y = 1.0-coord.y; /* flip image vertically */
         
 		Ray ray = get_camera_ray(render_settings.camera_mode, coord.x, coord.y);
 		sampled += eval_integrator(integrator_idx, ray);
 	}
 
-    float current_frame = float(render_settings.current_frame);
 
     sampled /= render_settings.aa;
-    sampled = temporal_accumulation_sample * current_frame / (current_frame + 1) +
-              sampled / (current_frame + 1);
+    sampled = (temporal_accumulation_sample * current_frame + sampled)
+              * inv_current_frame;
 
     imageStore(temporal_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));
     imageStore(result_image, ivec2(gl_GlobalInvocationID.xy), vec4(sampled, 0));

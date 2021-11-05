@@ -50,8 +50,8 @@ vec3 map_uniform_sphere
 
 {
 	/* inverse transform sampling mapping */
-	float phi = 2*PI*u;
-	float cos_theta = 1-2*v;
+	float phi = TWO_PI*u;
+	float cos_theta = 1-v-v;
 	float sin_theta = sqrt(1-cos_theta*cos_theta);
 	
 	/* unit spherical to Cartesian coordinates */
@@ -96,7 +96,7 @@ vec3 map_uniform_hemisphere
 
 {
 	/* inverse transform sampling */
-	float phi = 2*PI*u;
+	float phi = TWO_PI*u;
 	float cos_theta = v;
 	float sin_theta = sqrt(1-cos_theta*cos_theta);
 	
@@ -147,7 +147,7 @@ vec3 map_cosine_hemisphere
 
 {
 	/* inverse transform sampling */
-	float phi = 2*PI*u;
+	float phi = TWO_PI*u;
 	float cos_theta = sqrt(1-v);
 	float sin_theta = sqrt(v);
 	
@@ -176,8 +176,8 @@ vec3 map_uniform_ball
 	 
 {
 	/* inverse transform sampling */
-	float phi = 2*PI*u;
-	float cos_theta = 1-2*v;
+	float phi = TWO_PI*u;
+	float cos_theta = 1-v-v;
 	float sin_theta = sqrt(1-cos_theta*cos_theta);
 	float r = pow(w, 1.0/3.0);
 	

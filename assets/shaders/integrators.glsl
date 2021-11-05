@@ -352,7 +352,7 @@ vec3 integrator_Whitted
             /* offset to upper hemisphere to avoid self-intersection */
             pos_out = pos + EPSILON * normal;
             /* reflect */
-            dir_out = dir_in + 2*cos_in*normal;
+            dir_out = dir_in + (cos_in+cos_in)*normal;
             throughput *= mat_eval_mirror(info.mat.base_color);    
             break;
             
@@ -371,7 +371,7 @@ vec3 integrator_Whitted
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + 2*cos_in*normal;
+                dir_out = dir_in + (cos_in+cos_in)*normal;
             }
             else
             {
@@ -470,7 +470,7 @@ vec3 integrator_Cook
             pos_out = pos + EPSILON * normal;
             /* scatter cosine weighted */
             dir_out = mat_scatter_Lambert_cos(normal);
-            throughput *= mat_eval_Lambert_cos(info.mat.base_color/PI);
+            throughput *= mat_eval_Lambert_cos(info.mat.base_color*INV_PI);
             
             /* bounce once more */
             ray = Ray(pos_out, dir_out);
@@ -486,7 +486,7 @@ vec3 integrator_Cook
             /* offset to upper hemisphere to avoid self-intersection */
             pos_out = pos + EPSILON * normal;
             /* reflect */
-            dir_out = dir_in + 2*cos_in*normal;
+            dir_out = dir_in + (cos_in+cos_in)*normal;
             throughput *= mat_eval_mirror(info.mat.base_color);    
             break;
             
@@ -506,7 +506,7 @@ vec3 integrator_Cook
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + 2*cos_in*normal;
+                dir_out = dir_in + (cos_in+cos_in)*normal;
             }
             else
             {
@@ -608,14 +608,14 @@ vec3 integrator_Kajiya
             pos_out = pos + EPSILON * normal;
             /* scatter cosine weighted */
             dir_out = mat_scatter_Lambert_cos(normal);
-            throughput *= mat_eval_Lambert_cos(info.mat.base_color/PI);
+            throughput *= mat_eval_Lambert_cos(info.mat.base_color*INV_PI);
             break;
             
         case 1: /* perfect mirror */
             /* offset to upper hemisphere to avoid self-intersection */
             pos_out = pos + EPSILON * normal;
             /* reflect */
-            dir_out = dir_in + 2*cos_in*normal;
+            dir_out = dir_in + (cos_in+cos_in)*normal;
             throughput *= mat_eval_mirror(info.mat.base_color);    
             break;
             
@@ -635,7 +635,7 @@ vec3 integrator_Kajiya
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + 2*cos_in*normal;
+                dir_out = dir_in + (cos_in+cos_in)*normal;
             }
             else
             {
