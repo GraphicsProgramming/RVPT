@@ -40,7 +40,7 @@ vec3 handwritten_reflect
 */
 	
 {
-	return dir_in - 2*dot(dir_in,normal)*normal;
+	return dir_in - dot(dir_in,normal)*(normal+normal);
  
 } /* handwritten_reflect */
 

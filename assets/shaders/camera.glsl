@@ -39,8 +39,8 @@ Ray camera_pinhole_ray
 {
 	float aspect = cam.params.x;
 	float hfov = cam.params.y;
-	float u = aspect * (2.0*x-1.0);
-	float v = 2.0*y-1.0;
+	float u = aspect * (x+x-1.0);
+	float v = y+y-1.0;
 	float w = 1.0/tan(0.5*hfov);
 
     vec3 origin = cam.matrix[3].xyz;
@@ -66,8 +66,8 @@ Ray camera_ortho_ray
 	float scale_x = cam.params.z;
 	float scale_y = cam.params.z;
 	float aspect = cam.params.x;
-	float u = aspect * (2.0*x-1.0);
-	float v = 2.0*y-1.0;
+	float u = aspect * (x+x-1.0);
+	float v = y+y-1.0;
 	
     vec3 origin = (cam.matrix * vec4(scale_x*u,scale_y*v,0.0,1.0)).xyz;
     vec3 direction = cam.matrix[2].xyz;
@@ -88,7 +88,7 @@ Ray camera_spherical_ray
 */
  
 {
-	float phi = x * 2 * PI;
+	float phi = x * TWO_PI;
 	float theta = y * PI;
 	
 	vec3 origin = cam.matrix[3].xyz;
