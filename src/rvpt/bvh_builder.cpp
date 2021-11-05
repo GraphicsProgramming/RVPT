@@ -46,6 +46,14 @@ size_t BinnedBvhBuilder::compute_bin_index(int axis, const glm::vec3& center,
     return std::min(int{bin_count - 1}, std::max(0, index));
 }
 
+size_t BinnedBvhBuilder::compute_bin_index_precalc(int axis, const glm::vec3& center,
+                                           const AABB& aabb, const float precalc) noexcept
+{
+    int index =
+        (center[axis] - aabb.min[axis]) * (precalc);
+    return std::min(int{bin_count - 1}, std::max(0, index));
+}
+
 BinnedBvhBuilder::BestSplit BinnedBvhBuilder::find_best_split(
     size_t begin, size_t end, const AABB& node_aabb, const std::vector<uint32_t>& primitive_indices,
     const std::vector<glm::vec3>& primitive_centers,
@@ -54,15 +62,20 @@ BinnedBvhBuilder::BestSplit BinnedBvhBuilder::find_best_split(
     float min_cost = std::numeric_limits<float>::max();
     size_t min_bin = 0;
     int min_axis = -1;
+	
+    float precalc;
+	
     for (int axis = 0; axis < 3; ++axis)
     {
         Bin bins[bin_count];
+		
+        precalc = (static_cast<float>(bin_count) / node_aabb.diagonal()[axis]);
 
         // Fill bins with primitives
         for (size_t i = begin; i < end; ++i)
         {
             const glm::vec3& primitive_center = primitive_centers[primitive_indices[i]];
-            Bin& bin = bins[compute_bin_index(axis, primitive_center, node_aabb)];
+            Bin& bin = bins[compute_bin_index_precalc(axis, primitive_center, node_aabb, precalc)];
             bin.primitive_count++;
             bin.aabb.expand(bounding_boxes[primitive_indices[i]]);
         }
@@ -152,7 +165,7 @@ void BinnedBvhBuilder::build_bvh_node(Bvh& bvh, BvhNode& node_to_build,
                   [&primitive_centers, min_axis = min_axis](size_t i, size_t j) {
                       return primitive_centers[i][min_axis] < primitive_centers[j][min_axis];
                   });
-        right_partition_begin = primitives_begin + node_to_build.primitive_count / 2;
+        right_partition_begin = primitives_begin + node_to_build.primitive_count >> 1;
     }
     else
     {
