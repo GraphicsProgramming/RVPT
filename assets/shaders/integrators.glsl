@@ -359,19 +359,25 @@ vec3 integrator_Whitted
         case 2: /* dielectric */
         {
             float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
-            /* refraction cosine */
-            float cos_out = sqrt(max(0,cos_out_sqr));
-            /* Fresnel reflectance */
-            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
-            /* total internal reflection or Fresnel reflectance */
-            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+			float cos_out, f_refl;
+			
+			bool refl = (cos_out_sqr<=0);
+			if(!refl) {
+				/* refraction cosine */
+				cos_out = sqrt(max(0,cos_out_sqr));
+				/* Fresnel reflectance */
+				f_refl = frensel_reflectance(cos_in,cos_out,eta);
+            
+				/* total internal reflection or Fresnel reflectance */
+				refl = (rand() < f_refl);
+			}
             
             if (refl)
             {
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + (cos_in+cos_in)*normal;
+                dir_out = dir_in + (cos_in + cos_in)*normal;
             }
             else
             {
@@ -493,20 +499,25 @@ vec3 integrator_Cook
         case 2: /* dielectric */
         {
             float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
-            /* refraction cosine */
-            float cos_out = sqrt(max(0,cos_out_sqr));
-            /* Fresnel reflectance */
-            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
+			float cos_out, f_refl;
+			
+			bool refl = (cos_out_sqr<=0);
+			if(!refl) {
+				/* refraction cosine */
+				cos_out = sqrt(max(0,cos_out_sqr));
+				/* Fresnel reflectance */
+				f_refl = frensel_reflectance(cos_in,cos_out,eta);
             
-            /* total internal reflection or Fresnel reflectance */
-            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+				/* total internal reflection or Fresnel reflectance */
+				refl = (rand() < f_refl);
+			}
             
             if (refl)
             {
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + (cos_in+cos_in)*normal;
+                dir_out = dir_in + (cos_in + cos_in)*normal;
             }
             else
             {
@@ -622,20 +633,25 @@ vec3 integrator_Kajiya
         case 2: /* dielectric */
         {
             float cos_out_sqr = 1.0 - eta*eta * (1.0-cos_in*cos_in);
-            /* refraction cosine */
-            float cos_out = sqrt(max(0,cos_out_sqr));
-            /* Fresnel reflectance */
-            float f_refl = frensel_reflectance(cos_in,cos_out,eta);
+			float cos_out, f_refl;
+			
+			bool refl = (cos_out_sqr<=0);
+			if(!refl) {
+				/* refraction cosine */
+				cos_out = sqrt(max(0,cos_out_sqr));
+				/* Fresnel reflectance */
+				f_refl = frensel_reflectance(cos_in,cos_out,eta);
             
-            /* total internal reflection or Fresnel reflectance */
-            bool refl = (cos_out_sqr<=0) || (rand() < f_refl);
+				/* total internal reflection or Fresnel reflectance */
+				refl = (rand() < f_refl);
+			}
             
             if (refl)
             {
                 /* upper hemisphere offset */
                 pos_out = pos + EPSILON * normal;       
                 /* reflection */
-                dir_out = dir_in + (cos_in+cos_in)*normal;
+                dir_out = dir_in + (cos_in + cos_in)*normal;
             }
             else
             {

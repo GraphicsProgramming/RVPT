@@ -425,6 +425,56 @@ bool intersect_bvh(in Ray ray, float mint, float maxt, out Isect info)
 
 /*--------------------------------------------------------------------------*/
 
+bool intersect_bvh_any(in Ray ray, float mint, float maxt)
+{
+	uint[64] stack;
+	int stack_ptr = 0;
+
+	float closest_t = maxt;
+
+	stack[stack_ptr++] = ~0;
+	uint stack_top = 0;
+	while (stack_top != ~0)
+	{
+		BvhNode node = bvh_nodes[stack_top];
+		vec3 node_min = vec3(node.bounds[0], node.bounds[2], node.bounds[4]);
+		vec3 node_max = vec3(node.bounds[1], node.bounds[3], node.bounds[5]);
+		if (!intersect_aabb(ray, node_min, node_max, mint, closest_t)) {
+			stack_top = stack[--stack_ptr];
+			continue;
+		}
+
+		uint first_child_or_primitive = node.first_child_or_primitive;
+		if (node.primitive_count > 0)
+		{
+			// This is a leaf
+			for (uint i = first_child_or_primitive, n = i + node.primitive_count; i < n; ++i)
+			{
+				Triangle triangle = triangles[i];
+				vec3 v0 = triangle.vert0.xyz;
+				vec3 v1 = triangle.vert1.xyz;
+				vec3 v2 = triangle.vert2.xyz;
+				Isect temp_isect;
+				if (intersect_triangle_fast(ray, v0, v1, v2, mint, closest_t, temp_isect)) {
+					return true;
+				}
+			}
+			stack_top = stack[--stack_ptr];
+		}
+		else
+		{
+			// This is an internal node: Push its children on the stack.
+			// TODO: Order the children on the stack
+			stack[stack_ptr++] = first_child_or_primitive + 1;
+			stack_top = first_child_or_primitive;
+		}
+	}
+
+	return false;
+}
+
+/*--------------------------------------------------------------------------*/
+
 bool intersect_scene_any
 
 	(Ray   ray,  /* ray for the intersection */
@@ -441,20 +491,7 @@ bool intersect_scene_any
 */
 	 
 {
-	/* intersect triangles */
-	for (int i = 0; i < triangles.length(); i++)
-	{
-		Triangle tri = triangles[i];
-		
-		/* early out */
-		if (intersect_triangle_any(ray, 
-								   tri.vert0.xyz, 
-								   tri.vert1.xyz, 
-								   tri.vert2.xyz, 
-								   mint, maxt)) return true;
-	}
-	
-	return false;
+	return intersect_bvh_any(ray, mint, maxt);
 	
 } /* intersect_scene_any */
 
