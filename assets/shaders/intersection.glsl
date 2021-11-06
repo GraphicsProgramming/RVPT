@@ -338,32 +338,21 @@ bool intersect_aabb
 	For the derivation see the appendix. (Todo)
 */
 {
+    vec3 invdir = 1.0f / ray.direction;
 
-	/* Inverse transform on the ray */
-	vec3 inv_ray_dir = vec3(1 / ray.direction.x, 1 / ray.direction.y, 1 / ray.direction.z);
+    vec3 f = (aabb_max - ray.origin) * invdir;
+    vec3 n = (aabb_min - ray.origin) * invdir;
 
-	double tx0 = (aabb_min.x - ray.origin.x) * inv_ray_dir.x;
-	double tx1 = (aabb_max.x - ray.origin.x) * inv_ray_dir.x;
+    vec3 tmax = max(f, n);
+    vec3 tmin = min(f, n);
 
-	double tmin = min(tx0, tx1);
-	double tmax = max(tx0, tx1);
+    double t1 = min(tmax.x, min(tmax.y, tmax.z));
+    double t0 = max(tmin.x, max(tmin.y, tmin.z));
 
-	double ty0 = (aabb_min.y - ray.origin.y) * inv_ray_dir.y;
-	double ty1 = (aabb_max.y - ray.origin.y) * inv_ray_dir.y;
+	t0 = max(t0, mint);
+	t1 = min(t1, maxt);
 
-	tmin = max(tmin, min(ty0, ty1));
-	tmax = min(tmax, max(ty0, ty1));
-
-	double tz0 = (aabb_min.z - ray.origin.z) * inv_ray_dir.z;
-	double tz1 = (aabb_max.z - ray.origin.z) * inv_ray_dir.z;
-
-	tmin = max(tmin, min(tz0, tz1));
-	tmax = min(tmax, max(tz0, tz1));
-
-	tmin = max(tmin, mint);
-	tmax = min(tmax, maxt);
-
-	return tmax >= tmin;
+	return t1 >= t0;
 
 } /* intersect_aabb */
 
