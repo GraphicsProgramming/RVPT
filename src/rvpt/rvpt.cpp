@@ -37,11 +37,15 @@ RVPT::RVPT(Window& window)
     ImGui::CreateContext();
 
     std::ifstream input("project_configuration.json");
-    nlohmann::json json;
-    input >> json;
-    if (json.contains("project_source_dir"))
-    {
-        source_folder = json["project_source_dir"];
+    if(input) {
+	nlohmann::json json;
+	input >> json;
+	if (json.contains("project_source_dir"))
+	{
+		source_folder = json["project_source_dir"];
+	}
+    } else {
+	source_folder = ".";
     }
 
     random_numbers.resize(20480);
