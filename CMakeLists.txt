@@ -10,11 +10,9 @@ set(source_files
         src/rvpt/main.cpp
         src/rvpt/rvpt.cpp
         src/rvpt/window.cpp
-        src/rvpt/vk_util.cpp
         src/rvpt/imgui_impl.cpp
         ##assets/shaders/fullscreen_tri.vert
         ##assets/shaders/tex_sample.frag
-        src/rvpt/camera.cpp
         src/rvpt/timer.cpp
         src/rvpt/bvh.cpp
         src/rvpt/bvh_builder.cpp)
@@ -22,9 +20,7 @@ set(source_files
 set(header_files
         src/rvpt/rvpt.h
         src/rvpt/window.h
-        src/rvpt/vk_util.h
         src/rvpt/imgui_impl.h
-        src/rvpt/camera.h
         src/rvpt/timer.h
         src/rvpt/geometry.h
         src/rvpt/bvh.h
@@ -47,24 +43,38 @@ set (shader_files
     assets/shaders/util.glsl
 )
 
+add_library(rvpt-common
+        src/common/vk_util.cpp
+        src/common/vk_util.h
+        src/common/camera.cpp
+        src/common/camera.h)
+
+target_include_directories(rvpt-common PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_include_directories(rvpt-common PRIVATE external src/common) # For stb_image, tinyobjloader
+target_link_libraries(rvpt-common ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
+
 add_executable(rvpt ${source_files} ${header_files})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rvpt)
 
 target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
-target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader
-target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
+target_include_directories(rvpt PRIVATE external src/common) # For stb_image, tinyobjloader
+target_link_libraries(rvpt ${Vulkan_LIBRARIES} rvpt-common glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
 
 #add_executable(rvpt-demo ${DEMO_SOURCE_FILES})
 add_executable(rvpt-demo
         src/demo/main.cpp
 
         src/demo/window.cpp
-        src/demo/window.h)
+        src/demo/window.h
+        src/demo/engine.cpp
+        src/demo/engine.h
+        )
 
 target_include_directories(rvpt-demo PRIVATE ${Vulkan_INCLUDE_DIRS})
-target_include_directories(rvpt-demo PRIVATE external) # For stb_image, tinyobjloader
-target_link_libraries(rvpt-demo ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
+target_include_directories(rvpt-demo PRIVATE external src/common) # For stb_image, tinyobjloader
+target_link_libraries(rvpt-demo ${Vulkan_LIBRARIES} rvpt-common glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
+target_compile_definitions(rvpt-demo PRIVATE -DGLFW_INCLUDE_NONE)
 
 if (DEBUG)
     if (WIN32)
@@ -120,6 +130,7 @@ add_custom_target(copy-asset-files ALL
         DEPENDS compile-shaders rvpt)
 
 add_dependencies(rvpt compile-shaders)
+add_dependencies(rvpt-demo compile-shaders)
 
 # sets up path to source directory, useful for shader hot reloading
 configure_file (

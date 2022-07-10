@@ -2,7 +2,7 @@
 
 #include <fmt/core.h>
 
-demo::window::window(std::string_view title, uint32_t width, uint32_t height) {
+demo::window::window(std::string_view title, uint32_t width, uint32_t height) : _title(title), _size(width, height) {
     if (!glfwInit())
         fmt::print("failed to init glfw\n");
 
@@ -23,3 +23,6 @@ void demo::window::poll() {
 bool demo::window::should_close() const noexcept {
     return glfwWindowShouldClose(_handle);
 }
+std::string_view demo::window::title() const noexcept { return _title; }
+glm::ivec2 demo::window::size() const noexcept { return _size; }
+GLFWwindow* demo::window::handle() const noexcept { return _handle; }

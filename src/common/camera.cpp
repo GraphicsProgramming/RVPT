@@ -8,8 +8,6 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <imgui.h>
 
-#include "imgui_helpers.h"
-
 constexpr glm::vec3 RIGHT = glm::vec3(1, 0, 0);
 constexpr glm::vec3 UP = glm::vec3(0, 1, 0);
 constexpr glm::vec3 FORWARD = glm::vec3(0, 0, 1);
@@ -102,7 +100,7 @@ void Camera::update_imgui()
         if (ImGui::Button("Rot")) rotation = {};
 
         ImGui::Text("Projection");
-        dropdown_helper("camera_mode", mode, CameraModes);
+//        dropdown_helper("camera_mode", mode, CameraModes);
         if (mode == 0)
         {
             ImGui::SliderFloat("fov", &fov, 1, 179);
