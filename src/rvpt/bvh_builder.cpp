@@ -42,7 +42,7 @@ size_t BinnedBvhBuilder::compute_bin_index(int axis, const glm::vec3& center,
                                            const AABB& aabb) noexcept
 {
     int index = static_cast<int>((center[axis] - aabb.min[axis]) *
-        (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]);
+        (center[axis] - aabb.min[axis]) * (static_cast<float>(bin_count) / aabb.diagonal()[axis]));
     return std::min(int{bin_count - 1}, std::max(0, index));
 }
 

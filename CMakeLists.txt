@@ -72,7 +72,7 @@ else()
 endif()
 
 target_compile_options(rvpt
-        INTERFACE
+        PUBLIC
         $<$<OR:$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>,${RVPT_COMPILER_CLANGPP}>:
         -Wall
         -Wextra
@@ -81,8 +81,13 @@ target_compile_options(rvpt
         -Wsign-conversion>
         $<$<CXX_COMPILER_ID:MSVC>:
         /WX
-        /W4>
+        /W4
+        /EHsc>
         )
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(fmt PUBLIC /EHsc)
+endif()
 
 
 #compile shaders in assets/shaders
