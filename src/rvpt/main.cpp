@@ -57,9 +57,6 @@ void load_model(RVPT& rvpt, std::string inputfile, int material_id)
             index_offset += fv;
 
             rvpt.add_triangle(Triangle(vertices[0], vertices[1], vertices[2], material_id));
-
-            // per-face material
-            shape.mesh.material_ids[f];
         }
     }
 }
