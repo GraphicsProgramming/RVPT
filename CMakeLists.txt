@@ -55,6 +55,17 @@ target_include_directories(rvpt PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt PRIVATE external) # For stb_image, tinyobjloader
 target_link_libraries(rvpt ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
 
+#add_executable(rvpt-demo ${DEMO_SOURCE_FILES})
+add_executable(rvpt-demo
+        src/demo/main.cpp
+
+        src/demo/window.cpp
+        src/demo/window.h)
+
+target_include_directories(rvpt-demo PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_include_directories(rvpt-demo PRIVATE external) # For stb_image, tinyobjloader
+target_link_libraries(rvpt-demo ${Vulkan_LIBRARIES} glfw vk-bootstrap glm nlohmann_json::nlohmann_json fmt lib_imgui)
+
 if (DEBUG)
     if (WIN32)
         target_compile_options(rvpt PUBLIC /fsanitize=address)
