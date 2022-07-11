@@ -109,7 +109,7 @@ void Camera::update_imgui()
         }
         else if (mode == 1)
         {
-            ImGui::SliderFloat("scale", &scale, 0.1f, 20);
+            ImGui::SliderFloat("scale", &scale, 0.1, 20);
         }
 
         ImGui::Checkbox("Clamp Vertical Rot", &vertical_view_angle_clamp);
