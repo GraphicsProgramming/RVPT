@@ -275,7 +275,7 @@ void demo::engine::record_command_buffer(VK::SyncResources& current_frame,
 }
 
 demo::engine::engine(demo::window* window)
-    : _camera(window->size().y / static_cast<float>(window->size().x)), _window(window)
+    : _camera(window->size().x / static_cast<float>(window->size().y)), _window(window)
 {
 }
 
