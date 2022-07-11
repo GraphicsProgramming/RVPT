@@ -203,9 +203,7 @@ demo::engine::RenderingResources demo::engine::create_rendering_resources()
                                  static_cast<VkDeviceSize>(window_size.x * window_size.y * 4),
                                  VK::MemoryUsage::gpu);
 
-    return RenderingResources{std::move(debug_descriptor_pool),
-                              debug_pipeline_layout,
-                              opaque,
+    return RenderingResources{std::move(debug_descriptor_pool), debug_pipeline_layout, opaque,
                               std::move(depth_image)};
 }
 void demo::engine::add_per_frame_data(int index)
@@ -277,7 +275,7 @@ void demo::engine::record_command_buffer(VK::SyncResources& current_frame,
 }
 
 demo::engine::engine(demo::window* window)
-    : _camera(window->size().y / window->size().x), _window(window)
+    : _camera(window->size().y / static_cast<float>(window->size().x)), _window(window)
 {
 }
 
@@ -312,13 +310,15 @@ void demo::engine::init()
     }
 }
 
-void demo::engine::update(const std::vector<glm::vec3> &triangles, const glm::vec3 &translation, const glm::vec3 &rotation)
+void demo::engine::update(const std::vector<glm::vec3>& triangles, const glm::vec3& translation,
+                          const glm::vec3& rotation)
 {
     _camera.translate(translation);
     _camera.rotate(rotation);
 
     auto camera_data = _camera.get_data();
 
+    _triangle_count = triangles.size();
     std::vector<glm::vec3> debug_triangles;
     debug_triangles.reserve(triangles.size());
     for (auto& tri : triangles)
@@ -338,6 +338,7 @@ void demo::engine::update(const std::vector<glm::vec3> &triangles, const glm::ve
 
 void demo::engine::draw()
 {
+    _timer.frame_start();
     auto& current_frame = _sync_resources[_current_sync_index];
     uint32_t swapchain_image_index;
     VkResult result = vkAcquireNextImageKHR(_vk_device, _vkb_swapchain.swapchain, UINT64_MAX,
@@ -378,4 +379,6 @@ void demo::engine::draw()
     }
     _current_sync_index = (_current_sync_index + 1) % _sync_resources.size();
     _current_frame_index = (_current_frame_index + 1) % _per_frame_data.size();
+    _timer.frame_stop();
 }
+double demo::engine::since_last_frame() { return _timer.since_last_frame(); }

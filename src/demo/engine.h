@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <VkBootstrap.h>
+#include <timer.h>
 
 #include "vk_util.h"
 
@@ -69,6 +70,8 @@ private:
 
     uint32_t _triangle_count;
 
+    Timer _timer;
+
     // helper functions
     bool context_init();
     bool swapchain_init();
@@ -90,6 +93,8 @@ public:
 
     void update(const std::vector<glm::vec3> &triangles, const glm::vec3 &translation, const glm::vec3 &rotation);
     void draw();
+
+    [[nodiscard]] double since_last_frame();
 
 };
 

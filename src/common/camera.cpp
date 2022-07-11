@@ -22,7 +22,9 @@ glm::mat4 construct_camera_matrix(glm::vec3 translation, glm::vec3 rotation)
     return mat;
 }
 
-Camera::Camera(float aspect) : aspect(aspect) { _update_values(); }
+Camera::Camera(float aspect) : aspect(aspect) {
+    _update_values();
+}
 
 void Camera::translate(const glm::vec3 &in_translation)
 {

@@ -13,7 +13,6 @@ set(source_files
         src/rvpt/imgui_impl.cpp
         ##assets/shaders/fullscreen_tri.vert
         ##assets/shaders/tex_sample.frag
-        src/rvpt/timer.cpp
         src/rvpt/bvh.cpp
         src/rvpt/bvh_builder.cpp)
 
@@ -21,7 +20,6 @@ set(header_files
         src/rvpt/rvpt.h
         src/rvpt/window.h
         src/rvpt/imgui_impl.h
-        src/rvpt/timer.h
         src/rvpt/geometry.h
         src/rvpt/bvh.h
         src/rvpt/bvh_builder.h
@@ -47,7 +45,9 @@ add_library(rvpt-common
         src/common/vk_util.cpp
         src/common/vk_util.h
         src/common/camera.cpp
-        src/common/camera.h)
+        src/common/camera.h
+        src/common/timer.cpp
+        src/common/timer.h)
 
 target_include_directories(rvpt-common PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rvpt-common PRIVATE external src/common) # For stb_image, tinyobjloader

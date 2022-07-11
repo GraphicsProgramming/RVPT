@@ -73,7 +73,31 @@ int main()
     {
         window.poll();
 
-        engine.update(trianges);
+        const auto dt = engine.since_last_frame();
+
+        auto translation = glm::vec3();
+
+        if (window.is_key_held(demo::window::KeyCode::KEY_W))
+            translation.z += 1.0f;
+        if (window.is_key_held(demo::window::KeyCode::KEY_S))
+            translation.z -= 1.0f;
+
+        if (window.is_key_held(demo::window::KeyCode::KEY_D))
+            translation.x += 1.0f;
+        if (window.is_key_held(demo::window::KeyCode::KEY_A))
+            translation.x -= 1.0f;
+
+        translation *= static_cast<float>(dt);
+
+        auto rotation = glm::vec3();
+        if (window.is_key_down(demo::window::KeyCode::KEY_RIGHT)) rotation.x = 0.3f;
+        if (window.is_key_down(demo::window::KeyCode::KEY_LEFT)) rotation.x = -0.3f;
+        if (window.is_key_down(demo::window::KeyCode::KEY_UP)) rotation.y = 0.3f;
+        if (window.is_key_down(demo::window::KeyCode::KEY_DOWN)) rotation.y = -0.3f;
+
+        rotation *= static_cast<float>(dt);
+
+        engine.update(trianges, translation, rotation);
         engine.draw();
     }
 }
